@@ -1,65 +1,84 @@
-import Image from "next/image";
+import Link from "next/link";
+import { Sparkles, ArrowRight, Layers, LayoutTemplate, Workflow } from "lucide-react";
 
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+export default function LandingPage() {
+    return (
+        <div className="flex flex-col min-h-[calc(100vh-3.5rem)] bg-zinc-950 text-white selection:bg-primary/30 font-sans">
+            {/* Hero Section */}
+            <section className="relative px-6 py-24 flex-1 flex flex-col items-center justify-center text-center overflow-hidden">
+                {/* Background glow and grid */}
+                <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-primary/20 blur-[120px] rounded-full pointer-events-none opacity-50" />
+
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-800 text-xs font-mono uppercase tracking-widest text-zinc-400 mb-8 z-10 shadow-lg">
+                    <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+                    <span>v0.3 Cloud Sync Edition</span>
+                </div>
+
+                <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 z-10 max-w-4xl leading-tight text-white">
+                    The Workspace for <br className="hidden md:block" />
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-indigo-400 to-primary/80 drop-shadow-sm">
+                        AI Prompt Engineering
+                    </span>
+                </h1>
+
+                <p className="text-zinc-400 text-lg md:text-xl max-w-2xl mb-12 z-10 font-sans leading-relaxed">
+                    Transform your raw ideas into masterfully structured prompts for Midjourney, ComfyUI, and Flux. Organize your visual iterations in a private, deterministic gallery.
+                </p>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 z-10">
+                    <Link
+                        href="/login"
+                        className="group relative inline-flex items-center justify-center gap-2 px-8 py-4 bg-primary text-primary-foreground font-medium rounded-lg overflow-hidden transition-all hover:scale-[1.02] active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.1)] hover:shadow-[0_0_60px_rgba(255,255,255,0.2)]"
+                    >
+                        <span className="relative z-10">Start Creating Free</span>
+                        <ArrowRight className="relative z-10 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 pointer-events-none" />
+                    </Link>
+                    <Link
+                        href="/gallery"
+                        className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-zinc-900/80 backdrop-blur-sm text-zinc-300 font-medium rounded-lg border border-zinc-800 hover:bg-zinc-800 hover:text-white transition-all shadow-lg"
+                    >
+                        <Layers className="h-4 w-4" />
+                        View Demo Gallery
+                    </Link>
+                </div>
+            </section>
+
+            {/* Feature Section */}
+            <section className="px-6 py-24 bg-zinc-950 relative z-10 border-t border-zinc-900/50">
+                <div className="container mx-auto max-w-6xl">
+                    <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+                        <FeatureCard
+                            icon={<Layers className="h-6 w-6 text-primary" />}
+                            title="Multi-Modal Vision"
+                            description="Drop up to 5 reference images into your prompt. Type @Image to strictly direct the AI's cross-attention exactly where you want it."
+                        />
+                        <FeatureCard
+                            icon={<LayoutTemplate className="h-6 w-6 text-indigo-400" />}
+                            title="Mode Architect"
+                            description="Build infinite custom AI Directors. Define its personality, structural constraints, and complex JSON schemas using natural language."
+                        />
+                        <FeatureCard
+                            icon={<Workflow className="h-6 w-6 text-emerald-400" />}
+                            title="Deterministic Canvas"
+                            description="Review your creations in a flawless Masonry Gallery powered by a mathematical array-chunking algorithm—no CSS column tearing."
+                        />
+                    </div>
+                </div>
+            </section>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+    );
+}
+
+function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
+    return (
+        <div className="group flex flex-col p-8 rounded-2xl bg-zinc-900/40 border border-zinc-800/50 hover:bg-zinc-900 hover:border-zinc-700/50 transition-all duration-300 hover:-translate-y-1 shadow-sm hover:shadow-xl">
+            <div className="h-14 w-14 rounded-xl bg-black border border-zinc-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-inner">
+                {icon}
+            </div>
+            <h3 className="text-xl font-bold mb-3 text-white tracking-tight">{title}</h3>
+            <p className="text-zinc-500 leading-relaxed font-sans">{description}</p>
         </div>
-      </main>
-    </div>
-  );
+    );
 }
