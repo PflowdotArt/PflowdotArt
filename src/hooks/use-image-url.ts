@@ -10,8 +10,15 @@ export function useImageUrl(imageId?: string) {
             return;
         }
 
+        // Pass-through for already-resolved URLs
         if (imageId.startsWith('http') || imageId.startsWith('data:') || imageId.startsWith('blob:')) {
             setUrl(imageId);
+            return;
+        }
+
+        // Legacy Dexie IDs have no extension — skip
+        if (!imageId.includes('.')) {
+            setUrl(null);
             return;
         }
 
@@ -24,24 +31,13 @@ export function useImageUrl(imageId?: string) {
 
             const filePath = `${session.user.id}/${imageId}`;
 
-            // If the imageId doesn't have an extension (legacy Dexie ID format synced to cloud but no file), 
-            // or if it fails, fail gracefully without spamming the console
-            try {
-                const { data, error } = await supabase.storage
-                    .from('prompt-images')
-                    .createSignedUrl(filePath, 3600); // Valid for 1 hour locally
+            // The bucket is PUBLIC — use getPublicUrl (no auth/expiry issues)
+            const { data } = supabase.storage
+                .from('prompt-images')
+                .getPublicUrl(filePath);
 
-                if (error) {
-                    if (isMounted) setUrl(null);
-                    return;
-                }
-
-                if (isMounted && data) {
-                    setUrl(data.signedUrl);
-                }
-            } catch (e) {
-                if (isMounted) setUrl(null);
-                return;
+            if (isMounted && data?.publicUrl) {
+                setUrl(data.publicUrl);
             }
         };
 

@@ -263,12 +263,22 @@ The final output prompt must be standalone and assume the target AI generating t
   };
 
   const processFile = async (file: File) => {
-    if (!activeIteration) return;
-    if (!file || !file.type.startsWith('image/')) return;
+    console.log('[UPLOAD] processFile called', file?.name, file?.type, 'activeIteration:', activeIteration?.id ?? 'NULL');
+    if (!activeIteration) {
+      console.log('[UPLOAD] BLOCKED: no activeIteration');
+      setErrorMsg("Upload failed: no active iteration selected. Please select or create an iteration first.");
+      return;
+    }
+    if (!file || !file.type.startsWith('image/')) {
+      console.log('[UPLOAD] BLOCKED: not an image file', file?.type);
+      return;
+    }
 
+    console.log('[UPLOAD] Calling saveImage...');
     try {
       const metadata = await parseComfyUIPngMetadata(file).catch(() => null);
       const imageId = await api.saveImage(file, file.type);
+      console.log('[UPLOAD] saveImage succeeded:', imageId);
 
       // Always replace the image for the current iteration (don't append to array)
       const updates: Partial<PromptIteration> = {
@@ -285,11 +295,13 @@ The final output prompt must be standalone and assume the target AI generating t
         await api.updateSession(session.id, { coverImageId: imageId });
       }
       await loadCanvasData();
+      console.log('[UPLOAD] Done!');
     } catch (err: any) {
-      console.error("Failed to process image", err);
+      console.error('[UPLOAD] ERROR:', err?.message);
       setErrorMsg(`Image upload failed: ${err?.message || "Unknown error"}`);
     }
   };
+
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
