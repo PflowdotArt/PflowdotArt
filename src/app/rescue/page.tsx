@@ -98,7 +98,7 @@ export default function RescuePage() {
             try {
                 // If the blob is raw, it might be heavily unoptimized, but we'll upload as-is to ensure data safety
                 const { error } = await supabase.storage
-                    .from('images')
+                    .from('prompt-images')
                     .upload(filePath, itemBlob, {
                         contentType: itemBlob?.type || item.type || `image/${ext}`,
                         upsert: true

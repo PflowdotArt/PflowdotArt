@@ -286,7 +286,7 @@ export const api = {
         const filePath = `${session.user.id}/${fileName}`;
 
         const { error } = await supabase.storage
-            .from('images')
+            .from('prompt-images')
             .upload(filePath, finalBlob, {
                 contentType: finalType,
                 upsert: true
@@ -317,7 +317,7 @@ export const api = {
 
         try {
             // Create a short-lived signed URL to fetch the image securely
-            const { data, error } = await supabase.storage.from('images').createSignedUrl(filePath, 60); // 1 min
+            const { data, error } = await supabase.storage.from('prompt-images').createSignedUrl(filePath, 60); // 1 min
             if (error || !data) return null;
 
             const res = await fetch(data.signedUrl);

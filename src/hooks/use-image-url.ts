@@ -28,7 +28,7 @@ export function useImageUrl(imageId?: string) {
             // or if it fails, fail gracefully without spamming the console
             try {
                 const { data, error } = await supabase.storage
-                    .from('images')
+                    .from('prompt-images')
                     .createSignedUrl(filePath, 3600); // Valid for 1 hour locally
 
                 if (error) {
