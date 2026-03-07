@@ -192,22 +192,19 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
                         <Sparkles className="h-3 w-3" /> [OUTPUT.FINAL_RENDER_PROMPT]
                     </h3>
                     <p className="text-lg font-sans leading-relaxed text-foreground/90 selection:bg-primary/20">
-                        {components ? (
-                            Object.entries(components).map(([key, value], index) => {
-                                const colorVar = VAR_MAP_COLORS[index % VAR_MAP_COLORS.length];
-                                return (
-                                    <span
-                                        key={key}
-                                        style={{ color: colorVar }}
-                                        className="transition-all duration-300 hover:brightness-150 inline"
-                                    >
-                                        {String(value)}{" "}
-                                    </span>
-                                );
-                            })
-                        ) : (
-                            final_paragraph
-                        )}
+                        {/* Split final_paragraph by sentences so display == copied text, then color each sentence */}
+                        {final_paragraph
+                            .split(/(?<=[.!?])\s+/)
+                            .filter(Boolean)
+                            .map((sentence: string, index: number) => (
+                                <span
+                                    key={index}
+                                    style={{ color: VAR_MAP_COLORS[index % VAR_MAP_COLORS.length] }}
+                                    className="transition-all duration-300 hover:brightness-150 inline"
+                                >
+                                    {sentence}{" "}
+                                </span>
+                            ))}
                     </p>
                 </div>
             )}
