@@ -226,6 +226,8 @@ export const api = {
     },
 
     // Image APIs - Supabase Storage
+    // saveImage now returns the full storage path (userId/filename) so that
+    // useImageUrl can build the public URL without needing the session.
     async saveImage(blob: Blob, type: string): Promise<string> {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
@@ -244,7 +246,8 @@ export const api = {
             });
 
         if (error) throw new Error(error.message);
-        return fileName;
+        // Return FULL PATH so useImageUrl can build public URL without needing session
+        return filePath;
     },
 
     async getImage(id: string): Promise<any | undefined> {
