@@ -98,8 +98,12 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
     };
 
     const handleCopy = () => {
-        if (!final_paragraph) return;
-        navigator.clipboard.writeText(final_paragraph);
+        // Assemble in component (law) order so copy matches the displayed hero order
+        const textToCopy = components
+            ? Object.values(components).map(String).join(' ')
+            : final_paragraph;
+        if (!textToCopy) return;
+        navigator.clipboard.writeText(textToCopy);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -185,26 +189,26 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
                 )}
             </div>
 
-            {/* Final Paragraph Hero Display */}
-            {!isEditing && final_paragraph && (
+            {/* Final Paragraph Hero Display — rendered in component (law) order so colours match the breakdown below */}
+            {!isEditing && (components || final_paragraph) && (
                 <div className="bg-transparent border border-border/30 p-6 relative group">
                     <h3 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
                         <Sparkles className="h-3 w-3" /> [OUTPUT.FINAL_RENDER_PROMPT]
                     </h3>
                     <p className="text-lg font-sans leading-relaxed text-foreground/90 selection:bg-primary/20">
-                        {/* Split final_paragraph by sentences so display == copied text, then color each sentence */}
-                        {final_paragraph
-                            .split(/(?<=[.!?])\s+/)
-                            .filter(Boolean)
-                            .map((sentence: string, index: number) => (
+                        {components ? (
+                            Object.entries(components).map(([key, value], index) => (
                                 <span
-                                    key={index}
+                                    key={key}
                                     style={{ color: VAR_MAP_COLORS[index % VAR_MAP_COLORS.length] }}
                                     className="transition-all duration-300 hover:brightness-150 inline"
                                 >
-                                    {sentence}{" "}
+                                    {String(value)}{" "}
                                 </span>
-                            ))}
+                            ))
+                        ) : (
+                            final_paragraph
+                        )}
                     </p>
                 </div>
             )}
