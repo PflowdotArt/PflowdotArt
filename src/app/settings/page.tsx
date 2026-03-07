@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useLLMSettings } from "@/hooks/use-llm-settings";
 import { Button } from "@/components/ui/button";
@@ -33,8 +34,10 @@ const GEMINI_PRICING: Record<string, { in: string; out: string; context: string 
 
 type Tab = "account" | "llm";
 
-export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState<Tab>("account");
+function SettingsContent() {
+    const searchParams = useSearchParams();
+    const initialTab = (searchParams.get("tab") === "llm" ? "llm" : "account") as Tab;
+    const [activeTab, setActiveTab] = useState<Tab>(initialTab);
 
     // --- Account tab state ---
     const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -155,8 +158,8 @@ export default function SettingsPage() {
                         key={tab}
                         onClick={() => setActiveTab(tab)}
                         className={`px-5 py-2.5 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${activeTab === tab
-                                ? "border-primary text-primary"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
+                            ? "border-primary text-primary"
+                            : "border-transparent text-muted-foreground hover:text-foreground"
                             }`}
                     >
                         {tab === "llm" ? "LLM Gateway" : "Account"}
@@ -236,8 +239,8 @@ export default function SettingsPage() {
                                     {passwordStatus.type && (
                                         <div
                                             className={`text-sm p-3 rounded-md flex items-start gap-2 ${passwordStatus.type === "error"
-                                                    ? "bg-destructive/10 text-destructive"
-                                                    : "bg-primary/10 text-primary"
+                                                ? "bg-destructive/10 text-destructive"
+                                                : "bg-primary/10 text-primary"
                                                 }`}
                                         >
                                             {passwordStatus.type === "error" ? (
@@ -340,8 +343,8 @@ export default function SettingsPage() {
                                                         key={gem.name}
                                                         onClick={() => setFormData({ ...formData, model: gem.name.replace("models/", "") })}
                                                         className={`w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 ${isSelected
-                                                                ? "border-primary bg-primary/10 ring-1 ring-primary/50"
-                                                                : "border-border bg-background hover:bg-muted/50 hover:border-primary/40"
+                                                            ? "border-primary bg-primary/10 ring-1 ring-primary/50"
+                                                            : "border-border bg-background hover:bg-muted/50 hover:border-primary/40"
                                                             }`}
                                                     >
                                                         <div className="flex items-center justify-between w-full">
@@ -420,5 +423,12 @@ export default function SettingsPage() {
                 </Card>
             )}
         </div>
+    );
+}
+export default function SettingsPage() {
+    return (
+        <Suspense>
+            <SettingsContent />
+        </Suspense>
     );
 }

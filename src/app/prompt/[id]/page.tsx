@@ -508,7 +508,7 @@ The final output prompt must be standalone and assume the target AI generating t
               {!settingsLoaded || !settings.apiKey ? (
                 <div className="bg-destructive/10 text-destructive text-sm rounded-md p-3 flex justify-between items-center mb-2">
                   <span>Missing LLM API Key</span>
-                  <Link href="/settings">
+                  <Link href="/settings?tab=llm">
                     <Button size="sm" variant="outline" className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground">
                       <Settings className="h-4 w-4 mr-2" /> Fix
                     </Button>
@@ -673,7 +673,7 @@ The final output prompt must be standalone and assume the target AI generating t
                 {!settingsLoaded || !settings.apiKey ? (
                   <div className="bg-destructive/10 text-destructive text-sm rounded-none border border-destructive/30 p-3 flex justify-between items-center font-mono">
                     <span>[ERR] MISSING_API_KEY</span>
-                    <Link href="/settings">
+                    <Link href="/settings?tab=llm">
                       <Button size="sm" variant="outline" className="rounded-none border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground uppercase text-[10px]">
                         <Settings className="h-3 w-3 mr-2" /> Fix
                       </Button>
