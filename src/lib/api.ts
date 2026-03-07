@@ -234,50 +234,51 @@ export const api = {
         let finalBlob = blob;
         let finalType = type;
 
-        // Simple client-side compression for large images turning them into WebP
+        // Client-side compression: resize to max 1920px and convert to WebP.
+        // The Promise is wrapped in a 10s timeout so it can never hang silently.
         if (type.startsWith('image/') && typeof window !== 'undefined') {
             try {
-                finalBlob = await new Promise<Blob>((resolve) => {
-                    const img = new window.Image();
-                    const url = URL.createObjectURL(blob);
-                    img.onload = () => {
-                        URL.revokeObjectURL(url);
-                        let width = img.width;
-                        let height = img.height;
-                        const MAX_SIZE = 1920;
-
-                        if (width > MAX_SIZE || height > MAX_SIZE) {
-                            if (width > height) {
-                                height = Math.round((height * MAX_SIZE) / width);
-                                width = MAX_SIZE;
-                            } else {
-                                width = Math.round((width * MAX_SIZE) / height);
-                                height = MAX_SIZE;
-                            }
-                        }
-
-                        const canvas = document.createElement('canvas');
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        if (!ctx) return resolve(blob);
-                        ctx.drawImage(img, 0, 0, width, height);
-                        canvas.toBlob((b) => {
-                            if (b) {
-                                finalType = 'image/webp';
-                                resolve(b);
-                            } else {
+                const compressedBlob = await Promise.race<Blob>([
+                    new Promise<Blob>((resolve) => {
+                        const img = new window.Image();
+                        const url = URL.createObjectURL(blob);
+                        img.onerror = () => { URL.revokeObjectURL(url); resolve(blob); };
+                        img.onload = () => {
+                            URL.revokeObjectURL(url);
+                            try {
+                                let width = img.width;
+                                let height = img.height;
+                                const MAX_SIZE = 1920;
+                                if (width > MAX_SIZE || height > MAX_SIZE) {
+                                    if (width > height) { height = Math.round((height * MAX_SIZE) / width); width = MAX_SIZE; }
+                                    else { width = Math.round((width * MAX_SIZE) / height); height = MAX_SIZE; }
+                                }
+                                const canvas = document.createElement('canvas');
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext('2d');
+                                if (!ctx) { resolve(blob); return; }
+                                ctx.drawImage(img, 0, 0, width, height);
+                                canvas.toBlob((b) => {
+                                    if (b) { finalType = 'image/webp'; resolve(b); }
+                                    else { resolve(blob); }
+                                }, 'image/webp', 0.85);
+                            } catch (canvasErr) {
+                                console.warn('Canvas compression failed, using original', canvasErr);
                                 resolve(blob);
                             }
-                        }, 'image/webp', 0.85);
-                    };
-                    img.onerror = () => resolve(blob);
-                    img.src = url;
-                });
+                        };
+                        img.src = url;
+                    }),
+                    // 10-second failsafe: if compression hangs, use the original blob
+                    new Promise<Blob>((resolve) => setTimeout(() => resolve(blob), 10000)),
+                ]);
+                finalBlob = compressedBlob;
             } catch (e) {
-                console.error("Compression failed, using original file", e);
+                console.warn('Compression error, using original file', e);
             }
         }
+
 
         const id = uuidv4();
         // Determine file extension

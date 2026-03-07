@@ -285,8 +285,9 @@ The final output prompt must be standalone and assume the target AI generating t
         await api.updateSession(session.id, { coverImageId: imageId });
       }
       await loadCanvasData();
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to process image", err);
+      setErrorMsg(`Image upload failed: ${err?.message || "Unknown error"}`);
     }
   };
 
