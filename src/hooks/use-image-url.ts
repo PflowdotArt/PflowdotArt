@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
+import { createClient } from '@/lib/supabase/client';
 
 export function useImageUrl(imageId?: string) {
     const [url, setUrl] = useState<string | null>(null);
@@ -10,24 +10,45 @@ export function useImageUrl(imageId?: string) {
             return;
         }
 
-        let objectUrl: string | null = null;
-        let isMounted = true;
+        if (imageId.startsWith('http') || imageId.startsWith('data:') || imageId.startsWith('blob:')) {
+            setUrl(imageId);
+            return;
+        }
 
-        api.getImage(imageId).then((imageRecord) => {
-            if (!isMounted) return;
-            if (imageRecord && imageRecord.data) {
-                objectUrl = URL.createObjectURL(imageRecord.data);
-                setUrl(objectUrl);
-            } else {
-                setUrl(null);
+        let isMounted = true;
+        const supabase = createClient();
+
+        const fetchUrl = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
+
+            const filePath = `${session.user.id}/${imageId}`;
+
+            // If the imageId doesn't have an extension (legacy Dexie ID format synced to cloud but no file), 
+            // or if it fails, fail gracefully without spamming the console
+            try {
+                const { data, error } = await supabase.storage
+                    .from('images')
+                    .createSignedUrl(filePath, 3600); // Valid for 1 hour locally
+
+                if (error) {
+                    if (isMounted) setUrl(null);
+                    return;
+                }
+
+                if (isMounted && data) {
+                    setUrl(data.signedUrl);
+                }
+            } catch (e) {
+                if (isMounted) setUrl(null);
+                return;
             }
-        });
+        };
+
+        fetchUrl();
 
         return () => {
             isMounted = false;
-            if (objectUrl) {
-                URL.revokeObjectURL(objectUrl);
-            }
         };
     }, [imageId]);
 

@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, PromptIteration, PromptModeDef } from "@/lib/db";
-import { api } from "@/lib/api";
+import { api, PromptModeDef, PromptSession, PromptIteration } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Trash2, Send, Wand2, RefreshCw, PenSquare, ArrowRightLeft, Sparkles, MessageSquare, Plus, Check, Settings, Image as ImageIcon, Search, Download, Paperclip, UploadCloud } from "lucide-react";
 import getCaretCoordinates from "textarea-caret";
 import Link from "next/link";
+import Image from "next/image";
 import { useLLMSettings } from "@/hooks/use-llm-settings";
 import { generatePrompt, LLMMessage } from "@/lib/llm-client";
 import { parseComfyUIPngMetadata } from "@/lib/metadata-parser";
@@ -78,9 +77,28 @@ export default function PromptWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
 
-  const session = useLiveQuery(() => db.sessions.get(id), [id]);
-  const iterations = useLiveQuery(() => db.iterations.where({ sessionId: id }).sortBy('createdAt'), [id]);
-  const modes = useLiveQuery(() => db.modes.filter(m => !m.isHidden).toArray(), []);
+  const [session, setSession] = useState<PromptSession | null>(null);
+  const [iterations, setIterations] = useState<PromptIteration[] | null>(null);
+  const [modes, setModes] = useState<PromptModeDef[]>([]);
+
+  const loadCanvasData = useCallback(async () => {
+    try {
+      const dbSession = await api.getSession(id);
+      if (dbSession) setSession(dbSession);
+
+      const dbIterations = await api.getSessionIterations(id);
+      setIterations(dbIterations || []);
+
+      const dbModes = await api.getModes();
+      setModes(dbModes.filter((m: PromptModeDef) => !m.isHidden));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadCanvasData();
+  }, [loadCanvasData]);
 
   useEffect(() => {
     if (iterations && iterations.length > 0 && !activeIterationId) {
@@ -207,11 +225,6 @@ The final output prompt must be standalone and assume the target AI generating t
         userNotes: userInput,
       });
 
-      // Also persist initial references to Session if it's the first iteration
-      if (session && iterations?.length === 0 && pendingReferenceIds.length > 0) {
-        await api.updateSession(id, { referenceImageIds: pendingReferenceIds });
-      }
-
       setActiveIterationId(newId);
       setUserInput("");
       setPendingReferenceIds([]);
@@ -222,6 +235,8 @@ The final output prompt must be standalone and assume the target AI generating t
         await api.updateSession(id, { title: newTitle });
       }
 
+      // Refresh list to show the new iteration
+      await loadCanvasData();
     } catch (err: any) {
       setErrorMsg(err.message || "Something went wrong.");
     } finally {
@@ -269,6 +284,7 @@ The final output prompt must be standalone and assume the target AI generating t
       if (session && !session.coverImageId) {
         await api.updateSession(session.id, { coverImageId: imageId });
       }
+      await loadCanvasData();
     } catch (err) {
       console.error("Failed to process image", err);
     }
@@ -403,7 +419,7 @@ The final output prompt must be standalone and assume the target AI generating t
 
   const confirmDeleteSession = async () => {
     await api.deleteSession(id);
-    router.push("/");
+    router.push("/gallery");
   };
 
   const handleDeleteIteration = async (iterationIdToDelete: string) => {
@@ -427,6 +443,7 @@ The final output prompt must be standalone and assume the target AI generating t
         }
       }
       await api.deleteIteration(iterationIdToDelete);
+      await loadCanvasData();
       setIterationToDeleteId(null);
     } catch (e) {
       console.error("Failed to delete iteration:", e);
@@ -434,14 +451,14 @@ The final output prompt must be standalone and assume the target AI generating t
     }
   };
 
-  if (!session) return <div className="p-8 text-center animate-pulse">Loading Workspace...</div>;
+  if (!session || iterations === null) return <div className="p-8 text-center animate-pulse">Loading Workspace...</div>;
 
   return (
     <div className="flex h-[calc(100vh-64px)] w-full overflow-hidden bg-background">
       {/* Left Sidebar - Timeline */}
       <div className="w-64 border-r bg-muted/20 flex flex-col hidden md:flex">
         <div className="p-4 border-b flex items-center justify-between bg-background shrink-0">
-          <Link href="/">
+          <Link href="/gallery">
             <Button variant="outline" size="sm" className="gap-2 text-muted-foreground hover:text-foreground hover:border-primary/50 shadow-sm transition-all">
               <ArrowLeft className="h-4 w-4" /> Back to Gallery
             </Button>
@@ -603,7 +620,7 @@ The final output prompt must be standalone and assume the target AI generating t
                   </h2>
                 </div>
                 {/* Mobile-only exit button since sidebar is hidden on mobile */}
-                <Link href="/" className="md:hidden">
+                <Link href="/gallery" className="md:hidden">
                   <Button variant="outline" size="sm" className="gap-2 shadow-sm text-muted-foreground">
                     <ArrowLeft className="h-4 w-4" /> Exit
                   </Button>
@@ -759,25 +776,27 @@ The final output prompt must be standalone and assume the target AI generating t
                 ) : (
                   <div className="flex-1 flex flex-col gap-4 min-h-0 p-1">
                     <div
-                      className="relative w-full shadow-md rounded-xl overflow-hidden border bg-black/5 shrink-0 cursor-pointer group"
+                      className="relative w-full shadow-md rounded-xl overflow-hidden border bg-black/5 shrink-0 cursor-pointer group flex items-center justify-center"
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      {/* Optimized Next Image */}
+                      <Image
                         src={activeImageUrl}
                         alt="Generated Result"
-                        className="w-full h-full object-contain"
+                        width={1920}
+                        height={1080}
+                        className="w-full h-auto max-h-[70vh] object-contain"
                       />
                       {isDragging && (
-                        <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-primary border-dashed !rounded-xl flex items-center justify-center transition-all">
+                        <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-primary border-dashed !rounded-xl flex items-center justify-center transition-all z-10">
                           <span className="bg-background px-4 py-2 rounded-md text-sm font-semibold shadow-lg">Replace Generation</span>
                         </div>
                       )}
                       {!isDragging && (
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all">
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10">
                           <span className="bg-background px-4 py-2 rounded-md text-sm font-semibold shadow-lg flex items-center gap-2">
                             <UploadCloud className="h-4 w-4" /> Click to replace
                           </span>

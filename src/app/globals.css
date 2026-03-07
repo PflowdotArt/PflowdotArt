@@ -145,3 +145,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ─── Override browser autofill blue background ─────────────────────────────
+   The only reliable cross-browser technique: an inset box-shadow that paints
+   over the UA autofill color. #151515 = premium dark anthracite.           */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #151515 inset !important;
+  box-shadow: 0 0 0 1000px #151515 inset !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.85) !important;
+  caret-color: rgba(255, 255, 255, 0.85);
+  transition: background-color 9999s ease-in-out 0s; /* Delay Chrome's own fade-in */
+}

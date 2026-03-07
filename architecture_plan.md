@@ -1,53 +1,98 @@
-# PromptFlow (PromptMaster) - v0.2 Architecture
+# PromptFlow (PromptMaster) - v0.3 Architecture
 
 ## 1. Requirements & Core Entities
-PromptFlow is an advanced AI Prompt Engineering Workspace designed to structure latent diffusion model prompts (like Midjourney V6, Flux, and ComfyUI) using specialized AI directorial modes. 
+PromptFlow is an advanced AI Prompt Engineering Workspace designed to structure latent diffusion model prompts (Midjourney, Flux, ComfyUI, DALL-E) using specialized AI directorial modes. As of v0.3, the platform is fully cloud-authenticated via Supabase with a polished public-facing identity.
 
-### Core Data Models (IndexedDB via Dexie.js)
-* **Gallery Session (`Project`)**: A creative exploration session representing a core idea, shown in the home gallery.
-* **Iteration Node (`Node/Step`)**: Each specific generation within a session.
-  * **Input Idea**: The user's raw conversational request (e.g., "Make it cyberpunk").
-  * **Generated Prompt (`structuredPrompt`)**: Instead of raw text strings, the AI generates a strict JSON object parsing the script into 4/5/6 components (depending on the mode).
-  * **Extracted Params**: Key/Value UI tags natively parsed from the prompt to allow manual tweaking (e.g., `camera_lens`, `lighting_style`, `art_medium`).
-  * **Attached Media (`referenceImageIds`)**: Base64 encoded blobs connected intimately up to 5 per node.
+### Core Data Models
+#### Cloud (Supabase)
+- **Auth**: User accounts via Supabase Auth (Google OAuth + Email/Password).
+- **Storage**: `prompt-images` bucket in Supabase Storage. Image paths follow `{user_id}/{image_id}` convention.
+
+#### Local (IndexedDB via Dexie.js)
+- **Gallery Session (`Project`)**: A creative exploration session representing a core idea, shown in the gallery.
+- **Iteration Node (`Node/Step`)**: Each specific generation within a session.
+  - **Input Idea**: The user's raw conversational request.
+  - **Generated Prompt (`structuredPrompt`)**: Strict JSON object parsed into 4–6 components depending on the mode.
+  - **Extracted Params**: Key/Value UI tags natively parsed from the prompt.
+  - **Attached Media (`referenceImageIds`)**: UUIDs pointing to Supabase Storage objects (up to 5 per node).
 
 ---
 
 ## 2. Infrastructure & Technical Stack
 
 ### 2.1 Front-End Presentation Layer
-* **Framework**: React.js / Next.js 16 (App Router).
-* **Styling**: TailwindCSS heavily prioritized for structural layout combined with minimalist, terminal-inspired aesthetics (Space Grotesk typography) and dark mode.
-* **Core Views**:
-  1. **Masonry Gallery Home 2.0**: Cascading grid layout powered by a strict custom mathematical deterministic array-chunking algorithm rather than raw CSS columns. Employs mathematically absolute container boundaries `aspect-[3/4]` for pure text fallbacks.
-  2. **Prompt Workspace (Split-Pane)**: 
-     * **Left Pane**: Chat timeline, Active Mode Selector, and universal `@Image` mention text console.
-     * **Central Pane**: `ScriptPanel`, formatting the strict JSON prompt breakdown dynamically based on the selected mode's custom structural keys.
-     * **Right Pane**: `ParamInspector`, rendering dynamically generated input fields for extracted scene values.
-  3. **Floating Mode Manager** (`/modes`): Management interface for viewing, editing, and creating new `PromptModeDef`s utilizing a massive overlaid multi-pane `Dialog` component.
+- **Framework**: React.js / Next.js 16 (App Router, Turbopack).
+- **Styling**: TailwindCSS + Shadcn UI. Design language: minimalist retro-futuristic (Space Grotesk / Space Mono typography, near-black backgrounds, razor-thin borders).
+- **Core Views**:
 
-### 2.2 Business Logic & LLM Engine
-* **State Management**: Zustand handles the active workspace iteration and handles jumping between different branch points in history.
-* **The AI Director Engine (`llm-client.ts`)**:
-  * Employs dynamically generated `PromptModeDef` system prompts spanning `Role/Law/JSON Template` columns from IndexedDB.
-  * Auto-injects `@Image N` anchors deep into the payload format immediately preceding the `image_url` data buffer ensuring perfect multi-modal cross-attention.
-  * Seamlessly aggregates base64 image data structures into native `@google/genai` payloads payload definitions.
-* **Metadata Lifecycle**: 100% Client-side. Uses aggressive Dexie V-Bump migration scripts (`v6`) to retroactively sweep and correct UI errors deep within the legacy payload trees.
+| Route | Description |
+|---|---|
+| `/` | Public landing page — animated 16×16 multilingual prompt text matrix, no header |
+| `/login` | Split-screen retro-futuristic auth page (Sign In + Sign Up tabs), no header |
+| `/gallery` | Masonry gallery of sessions (auth-protected) |
+| `/prompt/[id]` | Split-pane prompt workspace (auth-protected) |
+| `/modes` | AI Mode manager (auth-protected) |
+| `/settings` | Tabbed settings: Account + LLM Gateway (auth-protected) |
+| `/rescue` | Legacy data migration wizard |
 
-### 2.3 Bring Your Own Key (BYOK) Strategy
-To keep infrastructure light and privacy high during MVP stages, back-end LLM processing is fully decentralized:
-* API Keys (OpenAI, Gemini, Anthropic) are held in browser `localStorage`.
-* **Google Gemini Integration**: Implements a dedicated dynamic model handshake auto-fetching real-time capability metrics, context limits, and cost maps across `gemini-2.5-flash` or `gemini-2.5-pro`.
+### 2.2 Authentication & Routing
+- **Supabase Auth**: Email/Password and Google OAuth providers.
+- **Next.js Middleware** (`src/middleware.ts` + `src/lib/supabase/middleware.ts`):
+  - Unauthenticated requests to protected routes → redirected to `/login`.
+  - Authenticated requests to `/login` → redirected to `/gallery`.
+- **`ConditionalHeader`** (`src/components/layout/conditional-header.tsx`): Client component that suppresses the topbar on `/` and `/login` using `usePathname()`.
+- **`LogoutButton`**: Signs out via Supabase, then redirects to `/` (landing page).
 
-## 3. Storage Layer
-Currently entirely client-side for absolute privacy and instantaneous data speed.
-* **Dexie.js (IndexedDB)** is the core database natively housing the complex iterative nodes.
-* Images are stored as `Blob` data fully within the user's browser storage. 
-* Implements robust cursor pagination and infinite lazy-loading algorithms to prevent massive local DBs from crushing browser thread limits.
+### 2.3 Business Logic & LLM Engine
+- **State Management**: Zustand handles the active workspace iteration state.
+- **The AI Director Engine** (`lib/llm-client.ts`):
+  - Dynamically generated `PromptModeDef` system prompts (Role/Law/JSON Template).
+  - Auto-injects `@Image N` anchors into multi-modal payloads.
+  - Aggregates base64 image data into `@google/genai` native payloads.
+- **Metadata Lifecycle**: 100% client-side. Dexie V6 migration scripts retroactively fix legacy payload trees.
+
+### 2.4 BYOK (Bring Your Own Key) Strategy
+- API Keys (OpenAI, Gemini, Anthropic) held in browser `localStorage`, never sent to server.
+- **Gemini Model Discovery**: Live `GET /v1beta/models?key=...` call populates interactive model selection cards in Settings, showing cost/context metrics per model.
+
+### 2.5 Landing Page Animation Engine
+- **256 Prompts** across 10 languages, Fisher-Yates shuffled client-side only (post-mount `useEffect`) to avoid SSR hydration mismatch.
+- **Single RAF loop** (`requestAnimationFrame`) drives all 256 cells at ~20fps. Each cell independently advances through `typing → pausing → erasing` phases with staggered timing.
+- **1px cursor** rendered as a `<span>` with inline `width: 1px; height: 0.85em` to avoid the visual weight of block-cursor characters.
 
 ---
 
-## 4. Next Phase Roadmap (Phase 9+)
-* **Cloud Sync (Supabase/PostgreSQL)**: Transition IndexedDB syncing to cloud database for multi-device access.
-* **Direct Image Generation APIs**: Integrate Replicate or ComfyUI workflows natively to let users compile the raw prompts immediately inside the IDE into actual diffusion renderings over webhooks.
-* **Full-text Local Search**: Execute high speed token-filters indexing the `userNotes` and JSON parameters so creators can query raw inspiration from their history.
+## 3. Storage Layer
+
+| Store | Used For | Notes |
+|---|---|---|
+| Supabase Storage (`prompt-images`) | User-uploaded reference images | Path: `{user_id}/{image_id}` |
+| Dexie.js (IndexedDB) | Sessions, iterations, modes, image metadata | V6 schema; blob data migrated to Supabase |
+| `localStorage` | LLM API keys, provider preferences | BYOK; never leaves browser |
+
+---
+
+## 4. Key File Map
+
+| File | Role |
+|---|---|
+| `src/app/page.tsx` | Animated landing page |
+| `src/app/login/page.tsx` | Auth page (Sign In / Sign Up) |
+| `src/app/settings/page.tsx` | Tabbed settings (Account + LLM Gateway) |
+| `src/app/rescue/page.tsx` | Legacy IndexedDB → Supabase migration tool |
+| `src/app/gallery/page.tsx` | Masonry gallery |
+| `src/app/prompt/[id]/page.tsx` | Prompt workspace |
+| `src/components/layout/conditional-header.tsx` | Suppresses header on `/` and `/login` |
+| `src/components/logout-button.tsx` | Signs out + redirects to `/` |
+| `src/lib/supabase/middleware.ts` | Auth routing walls |
+| `src/hooks/use-llm-settings.ts` | localStorage persistence for LLM config |
+| `src/lib/llm-client.ts` | Gemini/OpenAI/Anthropic abstraction |
+| `src/lib/db.ts` | Dexie schema V6 |
+
+---
+
+## 5. Roadmap (Phase 10+)
+- **Direct Image Generation**: Integrate Replicate / ComfyUI webhooks to render prompts into actual diffusion images within the workspace.
+- **Full-Text Search**: Token-filter index across `userNotes` and JSON parameters for querying creative history.
+- **Cloud Session Sync**: Migrate Dexie sessions/iterations to Supabase PostgreSQL for multi-device access.
+- **Public Prompt Gallery**: Opt-in sharing of sessions via short link with read-only viewer.

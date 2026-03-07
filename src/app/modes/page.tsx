@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useLiveQuery } from "dexie-react-hooks";
-import { db, PromptModeDef } from "@/lib/db";
+import { useState, useRef, useEffect } from "react";
+import { api, PromptModeDef } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus, Sparkles, BookOpen, Eye, EyeOff, Trash2, Settings2, Paperclip, Layers } from "lucide-react";
 import Link from "next/link";
@@ -11,7 +10,6 @@ import { generateNewModeArchitect } from "@/lib/llm-client";
 import { v4 as uuidv4 } from "uuid";
 import { ModeEditDialog } from "@/components/mode-edit-dialog";
 import { ImageReferenceList } from "@/components/image-reference-list";
-import { api } from "@/lib/api";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -25,7 +23,16 @@ import {
 import getCaretCoordinates from "textarea-caret";
 
 export default function ModesPage() {
-    const modes = useLiveQuery(() => db.modes.toArray(), []);
+    const [modes, setModes] = useState<PromptModeDef[] | null>(null);
+
+    const loadModes = async () => {
+        const data = await api.getModes();
+        setModes(data);
+    };
+
+    useEffect(() => {
+        loadModes();
+    }, []);
     const { settings } = useLLMSettings();
 
     const [creationPrompt, setCreationPrompt] = useState("");
@@ -179,7 +186,8 @@ export default function ModesPage() {
                 createdAt: Date.now()
             };
 
-            await db.modes.add(newMode);
+            await api.createMode(newMode);
+            await loadModes();
             setCreationPrompt("");
             setPendingReferenceIds([]);
             alert(`Successfully drafted and saved mode: ${newMode.name}!`);
@@ -192,18 +200,21 @@ export default function ModesPage() {
     };
 
     const toggleVisibility = async (mode: PromptModeDef) => {
-        await db.modes.update(mode.id, { isHidden: !mode.isHidden });
+        await api.updateMode(mode.id, { isHidden: !mode.isHidden });
+        await loadModes();
     };
 
     const confirmDeleteMode = async () => {
         if (modeToDelete) {
-            await db.modes.delete(modeToDelete);
+            await api.deleteMode(modeToDelete);
+            await loadModes();
             setModeToDelete(null);
         }
     };
 
     const handleSaveMode = async (updatedMode: PromptModeDef) => {
-        await db.modes.put(updatedMode);
+        await api.updateMode(updatedMode.id, updatedMode);
+        await loadModes();
         setEditingMode(null);
     };
 
@@ -408,26 +419,5 @@ export default function ModesPage() {
                 onSave={handleSaveMode}
             />
         </div>
-    );
-}
-
-function LayersIcon(props: any) {
-    return (
-        <svg
-            {...props}
-            xmlns="http://www.w3.org/2000/svg"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-        >
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 12 12 17 22 12" />
-            <polyline points="2 17 12 22 22 17" />
-        </svg>
     );
 }

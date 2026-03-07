@@ -1,22 +1,71 @@
-# Handover: PromptMaster v0.1.0
+# Handover: PromptFlow v0.3
 
 ## Current State
-The project has reached the end of Phase 8. All UI and UX stability goals for the Prompt Generation flow, Gallery Masonry layout, and Custom Mode editor have been completely realized. The app is robust, handles multi-modal inputs, and perfectly balances layout aesthetics.
+The project has completed Phase 9. The app is now a fully cloud-authenticated platform with a polished public identity. The core prompt engineering workflow is stable and production-ready. All data is migrated from pure local IndexedDB to a hybrid model: IndexedDB for structured data (sessions, iterations, modes), Supabase Auth for identity, and Supabase Storage for images.
+
+---
 
 ## Completed Major Capabilities
-- **LLM Abstraction**: `lib/llm-client.ts` uses the `@google/genai` SDK to dynamically route prompts to `gemini-2.5-flash` or `gemini-2.5-pro` based on user settings. Parses complex JSON outputs natively.
-- **Image References (Multi-modal)**: Users can attach up to 5 images per Session/Iteration. The UI supports drag-and-drop, inline `@Image` mentions within the textarea, and automatic base64 bundling into the LLM payload.
-- **Custom AI Modes**: The `Mode Editor` now supports overriding the System Prompt (Role/Law/JSON Template) and injecting structural `referenceImageIds` that ground every prompt generated under that mode.
-- **Robust Local Database**: Dexie.js (V6) powers the local-first storage (`sessions`, `iterations`, `modes`, `images`). Includes complex cursor pagination (`offset/limit`) for scalable infinite scrolling and retroactive migration logic to repair corrupted legacy titles.
-- **Masonry Gallery**: The home page `/` uses a deterministic mathematical array-chunking algorithm (reacting to a `useResponsiveColumns` resize hook) to pack infinite-scroll cards flawlessly without CSS column-break bleeding.
-- **Typography & Clamping**: Gallery cards execute language-aware line clamping (English: 3 lines, CJK: 2 lines) and mathematically safe layout boundaries for cards lacking generated image previews (65% text / 35% footer strict splitting).
+
+### Authentication & Identity (New in v0.3)
+- **Supabase Auth**: Google OAuth and Email/Password. Session managed via `@supabase/ssr` with cookie-based tokens.
+- **Next.js Middleware** (`src/lib/supabase/middleware.ts`): Protects `/gallery`, `/prompt`, `/modes`, `/settings` from unauthenticated access. Redirects logged-in users away from `/login`.
+- **`ConditionalHeader`** (`src/components/layout/conditional-header.tsx`): Renders the topbar only on post-auth pages (not on `/` or `/login`). Uses `usePathname()`.
+- **`LogoutButton`** (`src/components/logout-button.tsx`): Signs out via `supabase.auth.signOut()`, then `router.push("/")` + `router.refresh()`.
+
+### Public Landing Page (New in v0.3)
+- **File**: `src/app/page.tsx`
+- **Mechanics**: 256 prompts across 10 languages in a 16×16 CSS Grid. Single RAF loop at ~20fps drives a `typing → pausing → erasing` state machine per cell. `Math.random()` shuffle runs in `useEffect` only (post-mount, client-only) to avoid SSR hydration mismatch. `useState` counter forces re-renders from the RAF callback.
+- **Logo**: `artColor` randomly selected from 5 palette classes in a `useEffect`, matching header style.
+
+### Auth Page (New in v0.3)
+- **File**: `src/app/login/page.tsx`
+- **Structure**: Split-screen layout. Left brand panel (grid lines, diagonal accents, UTC clock). Right form panel (SIGN IN / SIGN UP tab switcher, bottom-border inputs, white CTA). Single component `AuthForm` wrapped in `<Suspense>` for `useSearchParams` compatibility in Next.js 16.
+- **`autoComplete` attributes**: `username email` / `current-password` / `new-password` depending on mode.
+
+### Settings Page — Tabbed (New in v0.3)
+- **File**: `src/app/settings/page.tsx`
+- **Account tab**: Supabase user email + provider badge. Password reset form (hidden for Google users).
+- **LLM Gateway tab**: Provider selector, API key, and Gemini model cards. Cards fetched live from `https://generativelanguage.googleapis.com/v1beta/models?key=...` with 800ms debounce.
+
+### Supabase Storage & Image Pipeline
+- **Bucket**: `prompt-images` (public bucket in your Supabase project).
+- **Path convention**: `{user.id}/{image_uuid}` — no file extension stored (extension inferred at upload time from blob MIME type).
+- **`useImageUrl` hook** (`src/hooks/use-image-url.ts`): Resolves image IDs to signed/public URLs. Handles legacy IDs gracefully by returning `null` if not found.
+- **Data Rescue** (`src/app/rescue/page.tsx`): One-time migration tool. Opens `PromptFlowDB_V2` IndexedDB, finds all image records (blob stored in `.data` field of `ImageRecord`), and bulk-uploads them to Supabase Storage using the authenticated user's ID. File name = original image UUID (no extension) for Postgres foreign key compatibility.
+
+### LLM Engine (Unchanged from v0.2)
+- **File**: `src/lib/llm-client.ts`
+- Uses `@google/genai` SDK. Dynamically constructs system prompts from `PromptModeDef`. Handles text + multi-image payloads.
+
+### Local Database (Unchanged from v0.2)
+- **File**: `src/lib/db.ts`
+- Dexie.js V6. Stores `sessions`, `iterations`, `modes`, `images`. V6 migration retroactively fixes corrupted session titles.
+
+---
 
 ## Critical Implementation Details for Next Agent
-1. **Never use standard CSS `columns` for Masonry**: It breaks Next.js hydration and tears React elements. Always use the deterministic mathematical sub-array chunking currently implemented in `src/app/page.tsx` (`const columnsData = Array.from({ length: cols }, () => [])`).
-2. **Ellipsis Source of Truth**: The database NEVER stores `...` at the end of strings anymore (since V6 Migration). It stores raw text up to 200 chars. 100% of truncation indicators (`...`) are generated dynamically by the browser via Tailwind's `line-clamp-X`.
-3. **Empty Card Strict Dimensions**: Empty cards in the gallery use `aspect-[3/4]` and are internally restricted with absolute percentage heights (`h-[65%]` / `h-[35%]`) to prevent structural overlap. Do not change this to flex-grow unless you redesign the boundary constraints.
 
-## Potential Future Work (Phase 9+)
-1. **Cloud Sync**: Integrating Supabase or Firebase to back up the Dexie.js local indexedDB.
-2. **Direct Image Generation API**: Hooking up the generated Prompt texts directly to Replicate (Flux/Midjourney API) via server actions so the user doesn't have to copy-paste.
-3. **Search & Tagging**: Implementing full-text search across all `session.title` and `iteration.userNotes` via a top-level nav search bar.
+1. **Hydration-safe randomness**: Never call `Math.random()` at module level in `"use client"` components used by the App Router. Always put random initialization inside `useEffect` (client-only, post-mount). This affects the landing page matrix animation.
+
+2. **`ConditionalHeader` must stay updated**: Any new public routes (e.g., `/about`, `/pricing`) should be added to the `pathname` exclusion list in `src/components/layout/conditional-header.tsx`.
+
+3. **Supabase image path convention**: Image uploads use `session.user.id + "/" + imageId` as the storage path. The `imageId` is the raw UUID from Dexie (no file extension). `useImageUrl` constructs the public URL using `supabase.storage.from("prompt-images").getPublicUrl(path)`.
+
+4. **Gemini model fetching**: The Settings page fetches from `v1beta/models` on Gemini. Filtering is: must start with `models/gemini` AND must include `generateContent` in `supportedGenerationMethods`. The `GEMINI_PRICING` map in `settings/page.tsx` is manually maintained — update when Google changes pricing.
+
+5. **Browser autofill**: A global CSS override in `globals.css` uses `inset box-shadow: 0 0 0 1000px #151515` to suppress browser blue autofill backgrounds. This applies to ALL inputs in the app globally.
+
+6. **Masonry Gallery**: Never revert to CSS `columns`. Always use the deterministic mathematical array-chunking algorithm in `src/app/gallery/page.tsx` via `useResponsiveColumns`.
+
+7. **`devIndicators: false`** is set in `next.config.ts` — this hides the Next.js dev toolbar "N" button during local development.
+
+---
+
+## Potential Future Work (Phase 10+)
+
+1. **Direct Image Generation**: Connect generated prompts to Replicate (Flux / SDXL) via server actions — user clicks "Generate" and the image renders in the workspace without copy-pasting.
+2. **Cloud Session Sync**: Migrate Dexie sessions/iterations to Supabase PostgreSQL for multi-device access.
+3. **Public Prompt Gallery**: Opt-in sharing of sessions via short link with a read-only viewer.
+4. **Full-Text Search**: Token-filter index across `session.title` and `iteration.userNotes` via a top nav search bar.
+5. **Version History**: Git-like branching within a session to explore alternative prompt trajectories.

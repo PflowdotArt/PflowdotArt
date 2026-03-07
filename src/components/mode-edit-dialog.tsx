@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PromptModeDef } from "@/lib/db";
+import { PromptModeDef } from "@/lib/api";
 
 interface ModeEditDialogProps {
   mode: PromptModeDef | null;

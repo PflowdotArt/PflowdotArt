@@ -10,7 +10,8 @@ export function LogoutButton() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.refresh(); // Refresh server components to catch new auth state
+    router.push('/'); // Force move to landing page first
+    router.refresh(); // Tell Next server components to drop cached auth 
   };
 
   return (

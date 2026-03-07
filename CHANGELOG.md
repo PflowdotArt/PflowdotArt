@@ -1,7 +1,53 @@
 # PromptFlow - Changelog
 
-All notable changes to this project will be documented in this file. 
+All notable changes to this project will be documented in this file.
 This log is intended for users and follows major feature releases and milestones, rather than granular Git commits.
+
+---
+
+## [v0.3] - The Cloud Identity & Public Surface Update
+**Date:** March 2026
+
+*A complete overhaul of the public-facing surfaces, user identity system, and cloud infrastructure. PromptFlow moves from a local-first anonymous tool to a fully authenticated, cloud-synced creative platform with a polished brand identity.*
+
+### 🌐 New Public Landing Page
+- **Animated Text Matrix Background**: Full-screen 16×16 grid (256 cells), each running an independent character-by-character typewriter animation. 256 prompts span 10 languages (EN 30%, ZH 10%, JA 10%, KO 10%, FR 10%, EL/RU/AR/ES/IT/DE 5% each). Languages are shuffled client-side with Fisher-Yates to intersperse across cells.
+- **Radial Vignette Overlay**: A tunable center-darkened gradient keeps the brand hero legible without fully obscuring the living background.
+- **Brand Identity**: `PromptFlow.art` logo rendered with the same retro-futuristic mono typography used in the app header — bold `P`, 40%-opacity `rompt`, bold `Flow.`, accent-colored `art` that randomly cycles through 5 color palettes on each load.
+- **CTA Buttons**: Clean "Sign In" (primary filled) and "Sign Up" (ghost border) entry points only. No navigation header on this page.
+
+### 🔐 Complete Auth System Redesign
+- **Retro-Futuristic Split-Screen Auth Page** (`/login`):
+  - **Left brand panel** (desktop): Pixel-perfect grid lines (48px, 4% opacity), six diagonal accent stripes, corner bracket marks, animated node status indicator with UTC clock ticker.
+  - **Right form panel**: SIGN IN / SIGN UP tab switcher (full-width, no-radius, inverted colors on active), bottom-border-only inputs with `px-1` breathing room, pure-white mono CTA button.
+  - Shared auth logic — Google OAuth and email/password in one page, mode toggled via tab.
+  - `autoComplete` attributes properly set: `username email` / `current-password` / `new-password`.
+  - Browser autofill blue override via global CSS `inset box-shadow` trick (#151515 anthracite).
+- **Header-Free Public Routes**: Landing page `/` and auth page `/login` are completely header-free. `ConditionalHeader` component routes based on `pathname`.
+- **Auth Routing Walls** (Next.js Middleware): Unauthenticated users attempting `/gallery`, `/prompt`, `/modes`, `/settings` are redirected to `/login`. Authenticated users on `/login` are redirected to `/gallery`.
+- **Sign Out Flow**: `LogoutButton` explicitly redirects to `/` (landing page) after destroying the Supabase session.
+
+### ⚙️ Settings Page — Tabbed Redesign
+- **Two-Tab Layout**: "Account" tab and "LLM Gateway" tab, switchable via clean top border-bottom tabs.
+- **Account Tab**: Displays user email and authentication provider badge (Google OAuth or Email & Password). Password reset form for email users; hidden for Google OAuth users.
+- **LLM Gateway Tab (BYOK)**: Full provider selector (OpenAI / Anthropic / Gemini / Custom), API key input, and model configuration.
+- **Gemini Model Cards Restored**: Entering a Gemini API key triggers a live call to the Google `v1beta/models` endpoint. Available models are displayed as interactive cards showing display name, version badge, input/output cost per million tokens (from a local pricing table), and context window size. Clicking a card selects the model. Manual override input still available below.
+- **Loading / Error States**: Spinner while fetching, red error box on invalid key, instructional placeholder when key is too short.
+
+### 🖼️ Image & Gallery Fixes
+- **Natural Aspect Ratios Restored**: Removed forced `aspect-[4/5]` from the Gallery thumbnail container and the Prompt Workspace image display. Images now render at their natural proportions.
+- **Prompt Workspace Image**: Switched from `Image fill` + fixed container to intrinsic `width`/`height` with `max-h-[70vh]` responsive constraint.
+
+### 🗄️ Cloud Storage & Data Migration
+- **Supabase Storage Integration**: Images now uploaded to and served from Supabase Storage (`prompt-images` bucket) rather than IndexedDB blobs.
+- **Data Rescue Tool** (`/rescue`): One-click migration wizard that scans legacy `PromptFlowDB_V2` IndexedDB for orphaned image blobs and bulk-uploads them to Supabase Storage using the authenticated user's ID as the path prefix.
+
+### 🛠️ Developer & Infrastructure
+- **`devIndicators: false`** in `next.config.ts`: Suppresses the Next.js dev toolbar "N" button so it doesn't appear to developers during local testing.
+- **Hydration Fix**: Moved `Math.random()` shuffle of the prompt matrix from module-level (ran on both server and client, producing different results) to a client-only `useEffect` after mount, eliminating the SSR hydration mismatch error.
+- **Global Autofill CSS Override**: Added `input:-webkit-autofill` rule in `globals.css` using the `inset box-shadow` technique to universally override the browser's blue autofill background across all inputs in the app.
+
+---
 
 ## [v0.2] - The Visual Architecture & Data Integrity Update
 **Date:** March 2026
@@ -16,7 +62,7 @@ This log is intended for users and follows major feature releases and milestones
 ### 📐 Masonry Gallery 2.0
 - **Algorithmic Chunking**: Replaced fragile CSS `columns` with a deterministic, math-based array-chunking algorithm for the home `/` gallery. Solves all hydration mismatches and visual tearing.
 - **Dynamic Clamping Engine**: Text cards now measure their density via regex. Dense CJK languages (Chinese, Japanese) are clamped to 2 lines to prevent suffocation, while English expands elegantly to 3 lines.
-- **Absolute Golden Ratios**: Images dynamically fill their tiles, but pure text cards now forcefully lock to an `aspect-[3/4]` golden ratio, mathematically slicing their interior into a 65% poetry block and 35% title footer. 
+- **Absolute Golden Ratios**: Images dynamically fill their tiles, but pure text cards now forcefully lock to an `aspect-[3/4]` golden ratio, mathematically slicing their interior into a 65% poetry block and 35% title footer.
 
 ### 🎛️ The Mode Editor (V10)
 - **Floating Window Paradigm**: The Mode Editor was ripped out of the document flow and rebuilt as a massive, dual-pane `Dialog` overlay.
@@ -25,42 +71,39 @@ This log is intended for users and follows major feature releases and milestones
 
 ### 🛡️ Core Data Migrations
 - **Dexie V5**: Upgraded DB schemas to natively track `referenceImageIds` on multiple relational levels.
-- **Dexie V6 (The Title Resurrecter)**: Wrote a deep retroactive migration to repair thousands of legacy Session titles that were historically corrupted by a white-space truncation bug. The migration digs into the first child iteration and extracts pristine user notes to rebuild the Gallery titles up to 200 characters.
+- **Dexie V6 (The Title Resurrecter)**: Wrote a deep retroactive migration to repair thousands of legacy Session titles that were historically corrupted by a white-space truncation bug.
 
 ---
 
 ## [v0.1] - The Mode Architect Engine
 **Date:** March 2026
 
-*A monumental leap from a static prompt generator to a dynamic ruleset builder. This version empowers users to create their own AI "Directors" using natural language and edit their DNA through a visual console.*
+*A monumental leap from a static prompt generator to a dynamic ruleset builder.*
 
 ### 🧠 Mode Architect (AI Metaprompt)
 - **Dynamic AI Modes**: Transitioned from 4 hardcoded aesthetic modes to an infinitely expanding IndexedDB-based library of `PromptModeDef` objects.
-- **The "Draft Mode" Console**: Users can now type a single sentence describing an art style (e.g., "Neon Cyberpunk Sprites") and PromptMaster will invoke Gemini to write a highly complex, perfect JSON system prompt that adheres to the 5-sentence-law and extracts custom UI parameters.
-- **Smart Semantic Extraction**: The LLM is now strictly instructed to use domain-specific JSON keys (e.g., `core_subject`, `lighting`, `cmf_materials`) for its internal breakdown, rather than lazy defaults like "sentence_1", yielding a highly professional UI.
+- **The "Draft Mode" Console**: Users can type a single sentence to have Gemini auto-generate a complex system prompt with domain-specific JSON keys.
+- **Smart Semantic Extraction**: Strictly instructed JSON keys (e.g., `core_subject`, `lighting`, `cmf_materials`).
 
 ### 🎛️ The Stacked Mode Editor (V9.2)
-- **Visual Split Architecture**: Discarded raw, error-prone JSON string editing for custom modes. The new editor visually splits the system prompt into 3 logical, vertical stacks:
-  1. `System Persona`: A free-form text area defining the AI's role.
-  2. `Rules of Creation`: A free-form area for unlimited chronological rules.
-  3. `JSON Structure`: A sleek, dark-themed, monospace console showing exactly how the AI will build the final payload.
-- **Bulletproof Regex Parser**: The underlying engine `prompt-parser.ts` now uses aggressive, forgiving fallbacks (anchoring on the first `{` and scanning for `CRITICAL RULES`) to successfully parse user modes, even when the AI hallucinates its markdown formatting.
+- **Visual Split Architecture**: System prompt split into 3 logical vertical stacks: System Persona, Rules of Creation, JSON Structure.
+- **Bulletproof Regex Parser**: `prompt-parser.ts` uses aggressive, forgiving fallbacks to parse modes even when the AI hallucinates markdown.
 
 ### 🛡️ UX & Infrastructure
-- **Network Resilience**: Added an exponential backoff `fetchWithRetry` wrapper to the LLM client, seamlessly handling temporary Gemini 503/429 rate limit errors without throwing red error boxes at the user.
-- **Active / Hidden Library**: Added visibility toggles to the `/modes` page so users can curate which active modes appear in their primary Prompt Workspace chat interface.
-- **Safe Deletion**: Added a Shadcn `AlertDialog` wrapper around the deletion workflows, replacing jarring browser native `confirm()` popups.
+- **Network Resilience**: Exponential backoff `fetchWithRetry` for Gemini 503/429 rate limit errors.
+- **Active / Hidden Library**: Visibility toggles on `/modes`.
+- **Safe Deletion**: Shadcn `AlertDialog` replaces native `confirm()` popups.
 
 ---
 
 ## [v0.0] - Initial MVP Release
 **Date:** March 2026
 
-*The foundation of the PromptFlow experience. This release establishes the core workspace, privacy-first local storage, and the foundational AI "Director" engine.*
+*The foundation of the PromptFlow experience.*
 
 ### ✨ Key Features
-- **4 Core Creative Modes**: Introduced specialized structural engines for generating precise prompts tailored for Photo, Art, 3D, and Design.
-- **Intelligent Split-Pane Workspace**: A brand new interface separating the conversational timeline on the left from the `ScriptPanel` and `ParamInspector` on the right.
-- **Dynamic Parameter Extraction**: The AI isolates key parameters from the prompt, allowing users to tweak individual elements via the right sidebar.
-- **Privacy-First Local Gallery**: All project iterations, prompts, and dropped images are stored entirely in IndexedDB.
-- **Bring Your Own Key (BYOK)**: Support for OpenAI and Google Gemini API keys stored locally.
+- **4 Core Creative Modes**: Photo, Art, 3D, and Design specialized engines.
+- **Intelligent Split-Pane Workspace**: Chat timeline + ScriptPanel + ParamInspector.
+- **Dynamic Parameter Extraction**: AI-extracted scene parameters as clickable UI tags.
+- **Privacy-First Local Gallery**: IndexedDB storage with Dexie.js.
+- **Bring Your Own Key (BYOK)**: OpenAI and Google Gemini API keys stored locally.

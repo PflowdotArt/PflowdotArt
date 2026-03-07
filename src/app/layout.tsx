@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Space_Mono } from "next/font/google";
-import { Header } from "@/components/layout/header";
+import { ConditionalHeader } from "@/components/layout/conditional-header";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
@@ -36,7 +36,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
+          <ConditionalHeader />
           <main className="flex-1 overflow-x-hidden">
             {children}
           </main>

@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { db, PromptSession } from "@/lib/db";
+import { PromptSession } from "@/lib/api";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { Sparkles, Plus, Layers, Trash2 } from "lucide-react";
 import { useImageUrl } from "@/hooks/use-image-url";
 import { useResponsiveColumns } from "@/hooks/use-responsive-columns";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import Image from "next/image";
 
 const PAGE_SIZE = 20;
 
@@ -39,11 +41,13 @@ function SessionCard({ session, onDeletePrompt }: { session: PromptSession, onDe
 
       {imageUrl ? (
         <>
-          <div className="relative w-full overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+          <div className="relative w-full overflow-hidden bg-muted/20">
+            <Image
               src={imageUrl}
               alt={session.title}
+              width={1024}
+              height={1024}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
               className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
             />
           </div>
@@ -114,12 +118,35 @@ export default function Home() {
     if (!hasMore) return;
     setIsLoading(true);
     try {
-      const page = await db.sessions
-        .orderBy('updatedAt')
-        .reverse()
-        .offset(offsetRef.current)
-        .limit(PAGE_SIZE)
-        .toArray();
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        setIsLoading(false);
+        setHasMore(false);
+        router.push("/login"); // User must be logged in to view their cloud gallery
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('updated_at', { ascending: false })
+        .range(offsetRef.current, offsetRef.current + PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      // Remap from DB snake_case to Frontend camelCase interface
+      const page: PromptSession[] = data.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        coverImageId: s.cover_image_id,
+        previewText: s.preview_text,
+        previewThumbnailId: s.preview_thumbnail_id,
+        createdAt: new Date(s.created_at).getTime(),
+        updatedAt: new Date(s.updated_at).getTime(),
+      }));
 
       if (page.length < PAGE_SIZE) {
         setHasMore(false);
@@ -133,11 +160,11 @@ export default function Home() {
       });
       offsetRef.current += page.length;
     } catch (err) {
-      console.error("Failed to load sessions", err);
+      console.error("Failed to load sessions from Supabase", err);
     } finally {
       setIsLoading(false);
     }
-  }, [hasMore]);
+  }, [hasMore, router]);
 
   // Initial load
   useEffect(() => {
@@ -199,7 +226,7 @@ export default function Home() {
           {Array.from({ length: columns }).map((_, colIndex) => (
             <div key={colIndex} className="flex flex-col flex-1 gap-2">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className={`bg-muted w-full animate-pulse transition-all ${Math.random() > 0.5 ? 'aspect-[3/4]' : 'aspect-square'}`}></div>
+                <div key={i} className={`bg-muted w-full animate-pulse transition-all ${(colIndex + i) % 2 === 0 ? 'aspect-[3/4]' : 'aspect-square'}`}></div>
               ))}
             </div>
           ))}

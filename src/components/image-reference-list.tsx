@@ -1,5 +1,6 @@
 import { useImageUrl } from "@/hooks/use-image-url";
 import { X, Maximize2 } from "lucide-react";
+import Image from "next/image";
 import {
     Dialog,
     DialogContent,
@@ -24,11 +25,11 @@ function ImageReferenceChip({ imageId, index, onRemove }: ImageReferenceChipProp
             <DialogTrigger asChild>
                 <div className={`group relative h-12 w-12 flex-shrink-0 animate-in fade-in zoom-in-95 duration-200 ${!onRemove ? 'cursor-pointer hover:ring-2 hover:ring-primary/50 rounded-md transition-all' : ''}`}>
                     {imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                             src={imageUrl}
                             alt="Reference"
-                            className="h-full w-full object-cover rounded-md border border-border/50 shadow-sm"
+                            fill
+                            className="object-cover rounded-md border border-border/50 shadow-sm"
                         />
                     ) : (
                         <div className="h-full w-full bg-muted animate-pulse rounded-md border border-border/50" />
@@ -64,13 +65,14 @@ function ImageReferenceChip({ imageId, index, onRemove }: ImageReferenceChipProp
             <DialogContent showCloseButton={false} className="max-w-[80vw] max-h-[80vh] md:max-w-[90vw] md:max-h-[90vh] w-fit p-0 border-none bg-transparent shadow-2xl flex items-center justify-center">
                 <DialogTitle className="sr-only">Image Reference Preview</DialogTitle>
                 {imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={imageUrl}
-                        alt="Enlarged Reference"
-                        onClick={() => setIsOpen(false)}
-                        className="max-w-[80vw] max-h-[80vh] md:max-w-[90vw] md:max-h-[90vh] object-contain rounded-md cursor-pointer"
-                    />
+                    <div className="relative w-[80vw] h-[80vh] md:w-[90vw] md:h-[90vh]" onClick={() => setIsOpen(false)}>
+                        <Image
+                            src={imageUrl}
+                            alt="Enlarged Reference"
+                            fill
+                            className="object-contain rounded-md cursor-pointer"
+                        />
+                    </div>
                 )}
             </DialogContent>
         </Dialog>
