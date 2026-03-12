@@ -1,20 +1,17 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-
 /**
  * Resolves an image ID to a displayable URL.
- *
- * Supports three formats for imageId:
- *  1. Full path: "userId/filename.png"  → builds public storage URL directly (no session needed)
- *  2. Filename only: "filename.png"     → falls back to session-based URL construction (legacy)
- *  3. Already a URL / data URI          → pass through unchanged
+ * NEW FORMAT: imageId is "userId/filename.ext" (full path).
+ * LEGACY FORMAT: imageId is just "filename.ext" (needs session).
  */
 export function useImageUrl(imageId?: string) {
     const [url, setUrl] = useState<string | null>(null);
 
     useEffect(() => {
+        console.log('[useImageUrl] imageId changed:', imageId);
+
         if (!imageId) {
             setUrl(null);
             return;
@@ -32,36 +29,36 @@ export function useImageUrl(imageId?: string) {
             return;
         }
 
-        // NEW FORMAT: "userId/filename.ext" — build public URL directly, no session needed
-        if (imageId.includes('/')) {
-            const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/prompt-images/${imageId}`;
-            setUrl(publicUrl);
-            return;
-        }
-
-        // LEGACY FORMAT: "filename.ext" only — need session to prepend userId
-        let isMounted = true;
         const supabase = createClient();
 
         const fetchUrl = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
+            console.log('[useImageUrl] session?.user?.id:', session?.user?.id);
 
-            const filePath = `${session.user.id}/${imageId}`;
+            let filePath: string;
+
+            // NEW FORMAT: "userId/filename.ext" → use as-is
+            // LEGACY: "filename.ext" → prepend userId
+            if (imageId.includes('/')) {
+                filePath = imageId;
+            } else {
+                if (!session?.user) {
+                    console.log('[useImageUrl] no session + no path = cannot resolve');
+                    return;
+                }
+                filePath = `${session.user.id}/${imageId}`;
+            }
+
+            console.log('[useImageUrl] calling getPublicUrl with path:', filePath);
             const { data } = supabase.storage
                 .from('prompt-images')
                 .getPublicUrl(filePath);
 
-            if (isMounted && data?.publicUrl) {
-                setUrl(data.publicUrl);
-            }
+            console.log('[useImageUrl] publicUrl result:', data?.publicUrl);
+            setUrl(data?.publicUrl ?? null);
         };
 
         fetchUrl();
-
-        return () => {
-            isMounted = false;
-        };
     }, [imageId]);
 
     return url;

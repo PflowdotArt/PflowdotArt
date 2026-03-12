@@ -16,30 +16,34 @@ interface ScriptPanelProps {
     data: any; // FluxPromptStructure + metadata (category, thoughts, etc)
     previousData?: any;
     onSave?: (newData: any) => void;
+    modeLabel?: string; // label of the mode used for this prompt, e.g. "Photorealistic"
 }
 
 const COMPONENT_TITLES: Record<string, string> = {
-    hook: "1. The Hook (Subject & Action)",
-    subject_details: "2. Subject Details",
-    setting: "3. Spatial Setting",
-    lighting_vibe: "4. Lighting & Atmosphere",
-    cinematography: "5. Cinematography & Rendering",
-    // Common mappings for other modes:
-    medium_style: "1. Medium & Style",
-    brushwork: "2. Brushwork & Technique",
-    subject: "3. Core Subject",
-    composition: "4. Composition",
-    color_mood: "5. Color & Mood",
-    influences: "6. Influences",
-    render_type: "1. Render Type & Subject",
-    cmf_materials: "2. CMF Materials",
+    // Photorealistic / cinematic mode keys
+    hook: "The Hook (Subject & Action)",
+    subject_details: "Subject Details",
+    setting: "Spatial Setting",
+    lighting_vibe: "Lighting & Atmosphere",
+    cinematography: "Cinematography & Rendering",
+    // Painting mode
+    medium_style: "Medium & Style",
+    brushwork: "Brushwork & Technique",
+    subject: "Core Subject",
+    composition: "Composition",
+    color_mood: "Color & Mood",
+    influences: "Influences",
+    // 3D / product render
+    render_type: "Render Type & Subject",
+    cmf_materials: "CMF Materials",
     lighting: "Lighting Setup",
     engine_fx: "Engine & FX",
-    artifact_type: "1. Artifact Definition",
-    typography: "2. Layout & Typography",
-    elements: "3. Core Elements",
-    design_language: "4. Aesthetics",
-    presentation: "5. Presentation",
+    // Graphic design
+    artifact_type: "Artifact Definition",
+    typography: "Layout & Typography",
+    elements: "Core Elements",
+    design_language: "Aesthetics",
+    presentation: "Presentation",
 };
 
 const VAR_MAP_COLORS = [
@@ -50,7 +54,7 @@ const VAR_MAP_COLORS = [
     "var(--color-cinema)"
 ];
 
-export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPanelProps) {
+export function StructuredPromptViewer({ data, previousData, onSave, modeLabel }: ScriptPanelProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [editData, setEditData] = useState<any>(null);
     const [copied, setCopied] = useState(false);
@@ -150,6 +154,11 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
                         <Badge variant="outline" className="text-[10px] font-mono uppercase bg-transparent text-primary border-primary/30 w-fit flex items-center gap-1 rounded-none px-2 py-0.5">
                             <Clapperboard className="h-3 w-3" /> [SYS.DIRECTOR_SCRIPT]
                         </Badge>
+                        {modeLabel && (
+                            <Badge variant="outline" className="text-[10px] font-mono uppercase bg-transparent text-muted-foreground/50 border-border/30 w-fit flex items-center gap-1 rounded-none px-2 py-0.5">
+                                // mode: {modeLabel}
+                            </Badge>
+                        )}
                     </div>
                     <div className="flex gap-2 shrink-0">
                         {isEditing ? (
@@ -222,6 +231,7 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
                         {Object.entries(components).map(([key, value], index) => {
                             const diff = getDiffState(key);
                             const displayTitle = COMPONENT_TITLES[key] || key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                            const numberedTitle = `${index + 1}. ${displayTitle}`;
                             const colorVar = VAR_MAP_COLORS[index % VAR_MAP_COLORS.length];
 
                             return (
@@ -236,7 +246,7 @@ export function StructuredPromptViewer({ data, previousData, onSave }: ScriptPan
                                                 className="text-[10px] font-mono uppercase tracking-widest opacity-80"
                                                 style={{ color: colorVar }}
                                             >
-                                                {displayTitle}
+                                                {numberedTitle}
                                             </span>
                                             {diff.isChanged && !isEditing && (
                                                 <span className="text-[10px] font-mono text-yellow-500 bg-yellow-500/10 px-1 py-0.5 rounded-sm">MODIFIED</span>
