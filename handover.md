@@ -60,6 +60,8 @@ The project has completed Phase 9. The app is now a fully cloud-authenticated pl
 
 7. **`devIndicators: false`** is set in `next.config.ts` — this hides the Next.js dev toolbar "N" button during local development.
 
+8. **Strict Mode Architect JSON Sync**: The `MODE_ARCHITECT_METAPROMPT` in `lib/llm-client.ts` contains a crucial `CRITICAL SYNC` instruction. The LLM is forced to name its output JSON `components` exactly after the titles it writes for the `law` section (e.g. `1. The Noble Subject` MUST map to `"the_noble_subject"`). If you change this metaprompt, you must preserve this rule, otherwise the UI `ParamInspector` and Prompt Viewer will display raw fallback keys.
+
 ---
 
 ## Potential Future Work (Phase 10+)

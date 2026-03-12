@@ -29,6 +29,11 @@ Sign In and Sign Up consolidated into a single split-screen page (`/login`):
 - Reference images uploaded to and served from Supabase Storage (`prompt-images` bucket).
 - **Data Rescue Tool** (`/rescue`): Bulk-migrates legacy IndexedDB image blobs to Supabase Storage for users upgrading from v0.1/v0.2.
 
+### 🧠 Mode Architect Sync
+- **Strict JSON Template Enforcement**: The auto-generated prompt modes now strictly sync their underlying JSON data keys to the aesthetic titles of their rules (e.g. `1. The Noble Subject` strictly mounts to `"the_noble_subject"`).
+- **Dynamic Defaulting**: Workspaces auto-select your newest custom mode first.
+- **UI Polish**: Multi-line textarea architect prompt input with unclipped `@Image` dropdowns.
+
 ---
 
 ## Previous Features (v0.0–v0.2)

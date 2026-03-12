@@ -42,6 +42,11 @@ This log is intended for users and follows major feature releases and milestones
 - **Supabase Storage Integration**: Images now uploaded to and served from Supabase Storage (`prompt-images` bucket) rather than IndexedDB blobs.
 - **Data Rescue Tool** (`/rescue`): One-click migration wizard that scans legacy `PromptFlowDB_V2` IndexedDB for orphaned image blobs and bulk-uploads them to Supabase Storage using the authenticated user's ID as the path prefix.
 
+### 🧠 Mode Architect Output Synchronization
+- **Strict JSON Key Sync**: Added a new constraint to the Mode Architect's internal metaprompt (`CRITICAL SYNC`). The architect LLM is now forced to dynamically name its JSON template parameters using the exact titles it invents for the 5-sentence "Law". This fixes a UI mismatch bug where generated workspaces blindly displayed raw placeholder keys like `1. Technical Spec`.
+- **Dynamic Mode Defaulting**: Creating a new Workspace now dynamically selects your *newest custom mode* instead of defaulting to the system `Photorealistic` mode. Custom modes are now heavily prioritized in the database fetch order.
+- **UI Architect Overhaul**: Rewrote the "Draft Mode" input UI from a flat single-line `<input>` to a flexible multi-line `<textarea>`. Repositioned the generating button below the text frame to handle long user prompts smoothly, and fixed a CSS overflow clip that obscured the `@Image` mention dropdown.
+
 ### 🛠️ Developer & Infrastructure
 - **`devIndicators: false`** in `next.config.ts`: Suppresses the Next.js dev toolbar "N" button so it doesn't appear to developers during local testing.
 - **Hydration Fix**: Moved `Math.random()` shuffle of the prompt matrix from module-level (ran on both server and client, producing different results) to a client-only `useEffect` after mount, eliminating the SSR hydration mismatch error.
