@@ -226,72 +226,118 @@ export const api = {
     },
 
     // Image APIs - Supabase Storage
-    // saveImage now returns the full storage path (userId/filename) so that
+    // saveImage returns the full storage path (userId/filename) so that
     // useImageUrl can build the public URL without needing the session.
     async saveImage(blob: Blob, type: string): Promise<string> {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) throw new Error("Must be logged in to upload images");
 
+        // Compress before upload: max 1280px wide, WebP 85% quality.
+        // Typical 9MB AI-generated PNG → ~150-400KB. Falls back to original on error.
+        const MAX_PX = 1280;
+        const QUALITY = 0.85;
+        let uploadBlob = blob;
+        let uploadType = type;
+
+        if (type.startsWith('image/') && typeof window !== 'undefined') {
+            try {
+                uploadBlob = await new Promise<Blob>((resolve) => {
+                    const img = new window.Image();
+                    img.onerror = () => resolve(blob);
+                    img.onload = () => {
+                        try {
+                            let w = img.naturalWidth;
+                            let h = img.naturalHeight;
+                            if (w > MAX_PX || h > MAX_PX) {
+                                if (w >= h) { h = Math.round(h * MAX_PX / w); w = MAX_PX; }
+                                else { w = Math.round(w * MAX_PX / h); h = MAX_PX; }
+                            }
+                            const canvas = document.createElement('canvas');
+                            canvas.width = w; canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            if (!ctx) { resolve(blob); return; }
+                            ctx.drawImage(img, 0, 0, w, h);
+                            canvas.toBlob(b => {
+                                if (b) { uploadType = 'image/webp'; resolve(b); }
+                                else resolve(blob);
+                            }, 'image/webp', QUALITY);
+                        } catch { resolve(blob); }
+                    };
+                    img.src = URL.createObjectURL(blob);
+                });
+            } catch { /* keep original */ }
+        }
+
         const id = uuidv4();
-        const ext = type.split('/')[1] || 'jpg';
-        const fileName = `${id}.${ext}`;
-        const filePath = `${session.user.id}/${fileName}`;
+        const ext = uploadType === 'image/webp' ? 'webp' : (uploadType.split('/')[1] || 'jpg');
+        const filePath = `${session.user.id}/${id}.${ext}`;
 
         const { error } = await supabase.storage
             .from('prompt-images')
-            .upload(filePath, blob, {
-                contentType: type,
-                upsert: true
-            });
+            .upload(filePath, uploadBlob, { contentType: uploadType, upsert: true });
 
         if (error) throw new Error(error.message);
-        // Return FULL PATH so useImageUrl can build public URL without needing session
-        return filePath;
+        return filePath; // full path — useImageUrl uses this to build the public URL
+    },
+    // Delete a file from Supabase Storage by its full path (userId/filename).
+    // Fails silently — a failed delete should never block the upload flow.
+    async deleteImage(filePath: string): Promise<void> {
+        if (!filePath || !filePath.includes('/')) return; // only handle new-format full paths
+        try {
+            const supabase = createClient();
+            const { error } = await supabase.storage.from('prompt-images').remove([filePath]);
+            if (error) console.warn('[deleteImage] failed to delete', filePath, error.message);
+        } catch (e) {
+            console.warn('[deleteImage] exception', e);
+        }
     },
 
     async getImage(id: string): Promise<any | undefined> {
+
 
         // Obsolete in cloud architecture, use URLs directly
         return undefined;
     },
 
-    async getImageAsBase64(fileName: string): Promise<string | null> {
-        // If it's a legacy Dexie ID (doesn't have an extension like .jpg or .webp)
-        if (!fileName.includes('.')) {
-            return null;
-        }
+    async getImageAsBase64(imageRef: string): Promise<string | null> {
+        // Legacy Dexie IDs have no extension — skip
+        if (!imageRef.includes('.')) return null;
 
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return null;
-
-        const filePath = `${session.user.id}/${fileName}`;
-
-        try {
-            // Create a short-lived signed URL to fetch the image securely
-            const { data, error } = await supabase.storage.from('prompt-images').createSignedUrl(filePath, 60); // 1 min
-            if (error || !data) return null;
-
-            const res = await fetch(data.signedUrl);
-            const blob = await res.blob();
-            return new Promise((resolve, reject) => {
+        const blobToBase64 = (blob: Blob): Promise<string> =>
+            new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                        resolve(reader.result);
-                    } else {
-                        reject(new Error("Failed to read blob as Base64"));
-                    }
-                };
+                reader.onloadend = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('read failed'));
                 reader.onerror = () => reject(reader.error);
                 reader.readAsDataURL(blob);
             });
+
+        try {
+            if (imageRef.includes('/')) {
+                // NEW FORMAT: "userId/filename.ext" — fetch directly from public bucket URL
+                const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+                const publicUrl = `${supabaseUrl}/storage/v1/object/public/prompt-images/${imageRef}`;
+                const res = await fetch(publicUrl);
+                if (!res.ok) { console.warn('[getImageAsBase64] fetch failed', res.status, publicUrl); return null; }
+                return blobToBase64(await res.blob());
+            } else {
+                // LEGACY FORMAT: "filename.ext" only — need session to build the path
+                const supabase = createClient();
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!session?.user) return null;
+                const filePath = `${session.user.id}/${imageRef}`;
+                const { data, error } = await supabase.storage.from('prompt-images').createSignedUrl(filePath, 60);
+                if (error || !data) return null;
+                const res = await fetch(data.signedUrl);
+                if (!res.ok) return null;
+                return blobToBase64(await res.blob());
+            }
         } catch (e) {
-            console.error("Failed to fetch image for base64 conversion", e);
+            console.error('[getImageAsBase64] error', e);
             return null;
         }
     },
+
 
     // Modes APIs
     async getModes(): Promise<PromptModeDef[]> {
@@ -299,23 +345,33 @@ export const api = {
         const { data: { session } } = await supabase.auth.getSession();
 
         try {
-            const { data, error } = await supabase.from('modes').select('*').or(`is_base_mode.eq.true,user_id.eq.${session?.user?.id || '00000000-0000-0000-0000-000000000000'}`);
-            if (error || !data || data.length === 0) {
-                return DEFAULT_MODES as PromptModeDef[];
+            const { data, error } = await supabase.from('modes')
+                .select('*')
+                .eq('user_id', session?.user?.id || '00000000-0000-0000-0000-000000000000')
+                .order('created_at', { ascending: false });
+
+            // Start with the default built-in modes
+            let allModes: PromptModeDef[] = [...DEFAULT_MODES];
+
+            if (!error && data && data.length > 0) {
+                const customModes = data.map((m: any) => ({
+                    id: m.id,
+                    name: m.name,
+                    description: m.description,
+                    role: m.role,
+                    law: m.law,
+                    jsonTemplate: m.json_template,
+                    referenceImageIds: m.reference_image_ids,
+                    isBaseMode: m.is_base_mode,
+                    isHidden: m.is_hidden,
+                    createdAt: new Date(m.created_at).getTime()
+                }));
+                allModes = [...customModes, ...DEFAULT_MODES];
             }
-            return data.map((m: any) => ({
-                id: m.id,
-                name: m.name,
-                description: m.description,
-                role: m.role,
-                law: m.law,
-                jsonTemplate: m.json_template,
-                referenceImageIds: m.reference_image_ids,
-                isBaseMode: m.is_base_mode,
-                isHidden: m.is_hidden,
-                createdAt: new Date(m.created_at).getTime()
-            }));
+
+            return allModes;
         } catch (e) {
+            console.error('[getModes] fetch failed:', e);
             return DEFAULT_MODES as PromptModeDef[];
         }
     },
@@ -323,9 +379,9 @@ export const api = {
     async createMode(mode: PromptModeDef): Promise<void> {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) throw new Error("Must be logged in");
+        if (!session?.user) throw new Error("Must be logged in to create a mode");
 
-        await supabase.from('modes').insert({
+        const { error } = await supabase.from('modes').insert({
             id: mode.id,
             user_id: session.user.id,
             name: mode.name,
@@ -333,10 +389,15 @@ export const api = {
             role: mode.role,
             law: mode.law,
             json_template: mode.jsonTemplate,
-            reference_image_ids: mode.referenceImageIds,
+            reference_image_ids: mode.referenceImageIds || [], // Ensure it doesn't fail if undefined
             is_base_mode: false,
             is_hidden: mode.isHidden,
         });
+
+        if (error) {
+            console.error('[createMode] insert failed:', error);
+            throw new Error(`DB Insert Error: ${error.message}`);
+        }
     },
 
     async updateMode(id: string, updates: Partial<PromptModeDef>): Promise<void> {

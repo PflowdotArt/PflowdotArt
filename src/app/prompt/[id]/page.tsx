@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, PromptModeDef, PromptSession, PromptIteration } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Trash2, Send, Wand2, RefreshCw, PenSquare, ArrowRightLeft, Sparkles, MessageSquare, Plus, Check, Settings, Image as ImageIcon, Search, Download, Paperclip, UploadCloud } from "lucide-react";
+import { ArrowLeft, Trash2, Send, Wand2, RefreshCw, PenSquare, ArrowRightLeft, Sparkles, MessageSquare, Plus, Check, Settings, Image as ImageIcon, Search, Download, Paperclip, UploadCloud, Loader2, X } from "lucide-react";
 import getCaretCoordinates from "textarea-caret";
 import Link from "next/link";
 import Image from "next/image";
@@ -69,6 +69,7 @@ export default function PromptWorkspace() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string>("photorealistic");
   const [isDeletingSession, setIsDeletingSession] = useState(false);
   const [iterationToDeleteId, setIterationToDeleteId] = useState<string | null>(null);
@@ -90,7 +91,15 @@ export default function PromptWorkspace() {
       setIterations(dbIterations || []);
 
       const dbModes = await api.getModes();
-      setModes(dbModes.filter((m: PromptModeDef) => !m.isHidden));
+      const visibleModes = dbModes.filter((m: PromptModeDef) => !m.isHidden);
+      setModes(visibleModes);
+
+      // Default to the first available mode (newest custom, or base) if we don't already have one synced
+      // It will be overridden by the useEffect hook below if the active iteration has a saved mode metadata.
+      const latestIter = dbIterations?.[dbIterations.length - 1];
+      if (!latestIter?.metadata?.mode && visibleModes.length > 0) {
+        setSelectedMode(visibleModes[0].id);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -108,6 +117,12 @@ export default function PromptWorkspace() {
 
   const activeIteration = iterations?.find(n => n.id === activeIterationId);
   const activeImageUrl = useImageUrl(activeIteration?.imageIds?.[0]);
+
+  // Sync selectedMode whenever the active iteration changes
+  useEffect(() => {
+    const mode = activeIteration?.metadata?.mode;
+    if (mode) setSelectedMode(mode);
+  }, [activeIteration?.id]);
 
   const [showMentionMenu, setShowMentionMenu] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -178,8 +193,8 @@ export default function PromptWorkspace() {
       const hasCurrentGenRef = activeIteration?.imageIds?.[0] && pendingReferenceIds.includes(activeIteration.imageIds[0]);
 
       const promptTextToUse = activeIteration && activeIteration.structuredPrompt
-        ? `Current Prompt State JSON: \n${JSON.stringify(activeIteration.structuredPrompt, null, 2)}\n\nUser's requested modification or new direction for the next iteration: ${promptText}`
-        : `Initial User Idea: ${promptText}\n\nCRITICAL: You MUST use the '${activeModeDef.name}' template structure for this request.`;
+        ? `Current Prompt State JSON: \n${JSON.stringify(activeIteration.structuredPrompt, null, 2)}\n\nUser's requested modification or new direction for the next iteration: ${promptText}\n\nCRITICAL: You MUST strictly adhere to the exact JSON keys defined in the # JSON OUTPUT FORMAT template.`
+        : `Initial User Idea: ${promptText}\n\nCRITICAL: You MUST use the '${activeModeDef.name}' template structure for this request. The keys inside your "components" object MUST exactly match the keys shown in the # JSON OUTPUT FORMAT section of your system instructions. Do NOT invent new keys.`;
 
       userMessageContent.push({ type: "text", text: promptTextToUse });
 
@@ -223,6 +238,7 @@ The final output prompt must be standalone and assume the target AI generating t
         imageIds: [],
         referenceImageIds: pendingReferenceIds.length > 0 ? pendingReferenceIds : undefined,
         userNotes: userInput,
+        metadata: { mode: selectedMode }, // persist which mode was used
       });
 
       setActiveIterationId(newId);
@@ -263,44 +279,49 @@ The final output prompt must be standalone and assume the target AI generating t
   };
 
   const processFile = async (file: File) => {
-    console.log('[UPLOAD] processFile called', file?.name, file?.type, 'activeIteration:', activeIteration?.id ?? 'NULL');
     if (!activeIteration) {
-      console.log('[UPLOAD] BLOCKED: no activeIteration');
-      setErrorMsg("Upload failed: no active iteration selected. Please select or create an iteration first.");
+      setErrorMsg("Upload failed: no active iteration selected.");
       return;
     }
-    if (!file || !file.type.startsWith('image/')) {
-      console.log('[UPLOAD] BLOCKED: not an image file', file?.type);
-      return;
-    }
+    if (!file || !file.type.startsWith('image/')) return;
 
-    console.log('[UPLOAD] Calling saveImage...');
+    setIsUploading(true);
     try {
       const metadata = await parseComfyUIPngMetadata(file).catch(() => null);
+
+      // Delete old image from Storage before uploading replacement
+      const oldImagePath = activeIteration.imageIds?.[0];
+      if (oldImagePath) await api.deleteImage(oldImagePath);
+
       const imageId = await api.saveImage(file, file.type);
-      console.log('[UPLOAD] saveImage succeeded:', imageId);
-
-      // Always replace the image for the current iteration (don't append to array)
-      const updates: Partial<PromptIteration> = {
-        imageIds: [imageId]
-      };
-
-      if (metadata) {
-        updates.metadata = metadata;
-      }
+      const updates: Partial<PromptIteration> = { imageIds: [imageId] };
+      if (metadata) updates.metadata = metadata;
 
       await api.updateIteration(activeIteration.id, updates);
-
       if (session && !session.coverImageId) {
         await api.updateSession(session.id, { coverImageId: imageId });
       }
       await loadCanvasData();
-      console.log('[UPLOAD] Done!');
     } catch (err: any) {
-      console.error('[UPLOAD] ERROR:', err?.message);
+      console.error("processFile error:", err?.message);
       setErrorMsg(`Image upload failed: ${err?.message || "Unknown error"}`);
+    } finally {
+      setIsUploading(false);
     }
   };
+
+  const handleDeleteImage = async () => {
+    if (!activeIteration) return;
+    const imagePath = activeIteration.imageIds?.[0];
+    try {
+      if (imagePath) await api.deleteImage(imagePath);
+      await api.updateIteration(activeIteration.id, { imageIds: [] });
+      await loadCanvasData();
+    } catch (err: any) {
+      setErrorMsg(`Failed to remove image: ${err?.message || 'Unknown error'}`);
+    }
+  };
+
 
 
   const handleDrop = async (e: React.DragEvent) => {
@@ -528,7 +549,11 @@ The final output prompt must be standalone and assume the target AI generating t
                   </Link>
                 </div>
               ) : null}
-              <ImageReferenceList imageIds={pendingReferenceIds} onRemove={id => setPendingReferenceIds(prev => prev.filter(p => p !== id))} />
+              <ImageReferenceList imageIds={pendingReferenceIds} onRemove={async (imgId) => {
+                // In this branch activeIteration is undefined — no main image to guard, always delete
+                setPendingReferenceIds(prev => prev.filter(p => p !== imgId));
+                await api.deleteImage(imgId);
+              }} />
               <div
                 className="relative group transition-all"
                 onDragOver={handleTextDragOver}
@@ -663,10 +688,12 @@ The final output prompt must be standalone and assume the target AI generating t
                         ? iterations[iterations.findIndex(i => i.id === activeIteration.id) - 1]
                         : undefined
                     }
+                    modeLabel={modes.find(m => m.id === (activeIteration.metadata?.mode || 'photorealistic'))?.name}
                     onSave={async (newData) => {
                       await api.updateIteration(activeIteration.id, {
                         structuredPrompt: newData
                       });
+                      await loadCanvasData(); // refresh UI after save
                     }}
                   />
                 ) : (
@@ -694,7 +721,29 @@ The final output prompt must be standalone and assume the target AI generating t
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    <ImageReferenceList imageIds={pendingReferenceIds} onRemove={id => setPendingReferenceIds(prev => prev.filter(p => p !== id))} />
+                    <ImageReferenceList imageIds={pendingReferenceIds} onRemove={async (imgId) => {
+                      const mainPath = activeIteration?.imageIds?.[0];
+                      setPendingReferenceIds(prev => prev.filter(p => p !== imgId));
+                      if (imgId !== mainPath) await api.deleteImage(imgId);
+                    }} />
+                    {/* Inline mode selector — subtle, mono */}
+                    {modes.length > 0 && (
+                      <div className="flex items-center gap-1.5 px-0.5">
+                        <span className="text-[10px] font-mono text-muted-foreground/40 tracking-widest shrink-0">// mode:</span>
+                        <div className="relative flex items-center">
+                          <select
+                            value={selectedMode}
+                            onChange={(e) => setSelectedMode(e.target.value)}
+                            className="text-[10px] font-mono bg-transparent text-muted-foreground/70 hover:text-foreground focus:text-foreground border-0 focus:outline-none cursor-pointer uppercase tracking-widest appearance-none pr-4 transition-colors"
+                          >
+                            {modes.map(m => (
+                              <option key={m.id} value={m.id}>{m.name.toUpperCase()}</option>
+                            ))}
+                          </select>
+                          <span className="pointer-events-none absolute right-0 text-muted-foreground/40 text-[10px] leading-none">▾</span>
+                        </div>
+                      </div>
+                    )}
                     <div
                       className="flex gap-0 border border-border/50 group focus-within:border-primary transition-colors min-h-[60px]"
                       onDragOver={handleTextDragOver}
@@ -771,7 +820,14 @@ The final output prompt must be standalone and assume the target AI generating t
                     />
                   </div>
                 )}
-                {!activeImageUrl ? (
+                {isUploading && !activeImageUrl ? (
+                  /* Uploading state — no existing image */
+                  <div className="w-full aspect-[4/5] md:aspect-auto md:flex-1 border border-border/50 flex flex-col items-center justify-center text-muted-foreground rounded-none relative overflow-hidden">
+                    <Loader2 className="h-6 w-6 mb-3 animate-spin opacity-30" />
+                    <span className="text-[10px] font-mono tracking-widest uppercase text-foreground/40">// Uploading...</span>
+                  </div>
+                ) : !activeImageUrl ? (
+                  /* Empty dropzone */
                   <div
                     className={`w-full aspect-[4/5] md:aspect-auto md:flex-1 border border-border/50 flex flex-col items-center justify-center text-muted-foreground transition-all ${isDragging ? 'border-primary bg-primary/10 scale-[0.99] border-dashed' : 'bg-transparent hover:bg-muted/30 hover:border-primary/50'} cursor-pointer rounded-none relative overflow-hidden group`}
                     onDragOver={handleDragOver}
@@ -787,15 +843,15 @@ The final output prompt must be standalone and assume the target AI generating t
                     <span className="text-[10px] font-mono opacity-50 mt-2 max-w-[200px] text-center">// Upload reference</span>
                   </div>
                 ) : (
-                  <div className="flex-1 flex flex-col gap-4 min-h-0 p-1">
+                  /* Image loaded */
+                  <div className="flex-1 flex flex-col gap-2 min-h-0 p-1">
                     <div
                       className="relative w-full shadow-md rounded-xl overflow-hidden border bg-black/5 shrink-0 cursor-pointer group flex items-center justify-center"
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => !isUploading && fileInputRef.current?.click()}
                     >
-                      {/* Optimized Next Image */}
                       <Image
                         src={activeImageUrl}
                         alt="Generated Result"
@@ -803,24 +859,44 @@ The final output prompt must be standalone and assume the target AI generating t
                         height={1080}
                         className="w-full h-auto max-h-[70vh] object-contain"
                       />
-                      {isDragging && (
+                      {/* Uploading overlay — replacing existing image */}
+                      {isUploading && (
+                        <div className="absolute inset-0 bg-background/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-20">
+                          <Loader2 className="h-5 w-5 animate-spin mb-2 opacity-50" />
+                          <span className="font-mono text-[10px] tracking-widest text-foreground/40">// Uploading...</span>
+                        </div>
+                      )}
+                      {!isUploading && isDragging && (
                         <div className="absolute inset-0 bg-primary/20 backdrop-blur-sm border-2 border-primary border-dashed !rounded-xl flex items-center justify-center transition-all z-10">
                           <span className="bg-background px-4 py-2 rounded-md text-sm font-semibold shadow-lg">Replace Generation</span>
                         </div>
                       )}
-                      {!isDragging && (
+                      {!isUploading && !isDragging && (
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all z-10">
                           <span className="bg-background px-4 py-2 rounded-md text-sm font-semibold shadow-lg flex items-center gap-2">
                             <UploadCloud className="h-4 w-4" /> Click to replace
                           </span>
                         </div>
                       )}
+                      {/* Delete image — top-right, appears on hover */}
+                      {!isUploading && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteImage(); }}
+                          className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md bg-background/80 border border-border/40 text-muted-foreground hover:text-destructive hover:border-destructive/40 backdrop-blur-sm"
+                          title="Remove image"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
+
+                    {/* Action row */}
                     {activeIteration?.imageIds?.[0] && (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full mt-1 font-mono text-[10px] uppercase tracking-widest gap-2 bg-background hover:bg-muted"
+                        className="w-full font-mono text-[10px] uppercase tracking-widest gap-2 bg-background hover:bg-muted"
                         onClick={() => {
                           const imgId = activeIteration.imageIds[0];
                           if (imgId && !pendingReferenceIds.includes(imgId)) {
@@ -832,7 +908,7 @@ The final output prompt must be standalone and assume the target AI generating t
                       </Button>
                     )}
 
-                    <div className="space-y-2 flex flex-col shrink-0 mb-2 mt-4">
+                    <div className="space-y-2 flex flex-col shrink-0 mb-2 mt-2">
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                         <Settings className="h-3 w-3" />
                         Gen Metadata
@@ -847,7 +923,6 @@ The final output prompt must be standalone and assume the target AI generating t
                         )}
                       </div>
                     </div>
-
                   </div>
                 )}
               </div>

@@ -90,9 +90,10 @@ You must return PURE valid JSON outlining the mode's metadata and its intricate 
 # DESIGNING THE SYSTEM PROMPT
 The 'systemPrompt' you write MUST follow this advanced pattern to ensure deterministic JSON outputs from future AIs:
 1. Define the AI's role (e.g., "You are an elite AI Director...").
-2. Define "THE X-SENTENCE LAW" for the requested medium (e.g., 1. Medium Hook, 2. Details, 3. Lighting, etc.). Strict 4 to 6 sentences.
+2. Define "THE X-SENTENCE LAW" for the requested medium (e.g., 1. Medium Hook, 2. Details, 3. Lighting, etc.). Strict 4 to 6 sentences. YOU MUST give each step a clear, distinct title.
 3. Define the strict JSON Output Format the AI must use. It MUST include "thoughts", "final_paragraph", "components" (breaking down the sentences into DESCRIPTIVE keys like "core_subject", "environment", "camera_lens", "typography" - NEVER use generic keys like "sentence_1" or "sentence_2"), and "extracted_ui_params" (3-5 key parameters users can tweak, like 'color_palette', 'camera_lens').
-4. Include CRITICAL RULES requiring the final paragraph to match the user's language while keys stay English.
+4. CRITICAL SYNC: The descriptive keys inside the "components" JSON object MUST exactly correlate with the titles of your "N-SENTENCE LAW" steps. (e.g. if Law 1 is "1. The Noble Subject", the JSON key must be "the_noble_subject"). Do NOT create a mismatch where the law talks about one concept, but the JSON key asks for "technical_spec".
+5. Include CRITICAL RULES requiring the final paragraph to match the user's language while keys stay English.
 
 # YOUR JSON OUTPUT FORMAT
 {
@@ -104,7 +105,7 @@ The 'systemPrompt' you write MUST follow this advanced pattern to ensure determi
 }
 `;
 
-export async function generateNewModeArchitect(concept: string, settings: LLMSettings) {
+export async function generateNewModeArchitect(concept: string | any[], settings: LLMSettings) {
   if (!settings.apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
   }
@@ -126,7 +127,15 @@ export async function generateNewModeArchitect(concept: string, settings: LLMSet
         model: settings.model,
         messages: [
           { role: "system", content: MODE_ARCHITECT_METAPROMPT },
-          { role: "user", content: `Design a new generation mode optimized for this concept: ${concept}` }
+          {
+            role: "user",
+            content: typeof concept === 'string'
+              ? `Design a new generation mode optimized for this concept: ${concept}`
+              : [
+                { type: "text", text: "Design a new generation mode optimized for this concept/images:" },
+                ...concept
+              ]
+          }
         ],
         temperature: 0.7,
         response_format: { type: "json_object" }

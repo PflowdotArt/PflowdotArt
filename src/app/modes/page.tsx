@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from "react";
 import { api, PromptModeDef } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Plus, Sparkles, BookOpen, Eye, EyeOff, Trash2, Settings2, Paperclip, Layers } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Sparkles, BookOpen, Eye, EyeOff, Trash2, Settings2, Paperclip, Layers, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useLLMSettings } from "@/hooks/use-llm-settings";
 import { generateNewModeArchitect } from "@/lib/llm-client";
@@ -45,7 +46,7 @@ export default function ModesPage() {
     const [mentionCoords, setMentionCoords] = useState({ top: 0, left: 0 });
 
     const attachInputRef = useRef<HTMLInputElement>(null);
-    const textInputRef = useRef<HTMLInputElement>(null);
+    const textInputRef = useRef<HTMLTextAreaElement>(null);
 
     const handleTextDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -74,7 +75,7 @@ export default function ModesPage() {
         }
     };
 
-    const handleTextInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleTextInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
         setCreationPrompt(val);
 
@@ -97,7 +98,7 @@ export default function ModesPage() {
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.nativeEvent.isComposing || e.keyCode === 229) {
             return;
         }
@@ -151,6 +152,8 @@ export default function ModesPage() {
     // Dialog states
     const [editingMode, setEditingMode] = useState<PromptModeDef | null>(null);
     const [modeToDelete, setModeToDelete] = useState<string | null>(null);
+    const [statusMsg, setStatusMsg] = useState("");
+    const [isError, setIsError] = useState(false);
 
     const handleDraftMode = async () => {
         if (!creationPrompt.trim() || !settings.apiKey) return;
@@ -190,10 +193,13 @@ export default function ModesPage() {
             await loadModes();
             setCreationPrompt("");
             setPendingReferenceIds([]);
-            alert(`Successfully drafted and saved mode: ${newMode.name}!`);
+            setStatusMsg(`Successfully drafted mode: ${newMode.name}`);
+            setIsError(false);
+            setTimeout(() => setStatusMsg(""), 4000);
         } catch (err: any) {
             console.error(err);
-            alert(`Failed to generate mode: ${err.message}`);
+            setStatusMsg(`Failed: ${err.message}`);
+            setIsError(true);
         } finally {
             setIsGenerating(false);
         }
@@ -234,9 +240,9 @@ export default function ModesPage() {
                 </div>
             </div>
 
-            {/* Mode Creator Concept */}
-            <div className="mb-12 border border-primary/20 bg-primary/5 rounded-xl p-6 relative overflow-hidden group">
-                <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
+            <div className="mb-12 border border-primary/20 bg-primary/5 rounded-xl p-6 relative group">
+                {/* The overflow-hidden property used to cut off the @mention dropdown. Now using rounded styling directly instead. */}
+                <div className="absolute top-0 left-0 w-1 h-full bg-primary rounded-l-xl" />
                 <h2 className="font-mono text-sm tracking-widest uppercase text-primary mb-2 flex items-center gap-2">
                     <Sparkles className="h-4 w-4" />
                     Custom Mode Architect
@@ -248,19 +254,19 @@ export default function ModesPage() {
                 <ImageReferenceList imageIds={pendingReferenceIds} onRemove={id => setPendingReferenceIds(prev => prev.filter(p => p !== id))} />
 
                 <div
-                    className="relative flex gap-0 border border-border/50 rounded-md focus-within:border-primary transition-colors bg-background overflow-visible"
+                    className="relative flex gap-0 border border-border/50 rounded-md focus-within:border-primary transition-colors bg-background overflow-visible items-stretch"
                     onDragOver={handleTextDragOver}
                     onDrop={handleTextDrop}
                 >
-                    <div className="flex items-center justify-center px-3 text-primary/50 font-mono text-base border-r border-border/30 bg-muted/5 shrink-0 gap-1 rounded-l-md overflow-hidden">
+                    <div className="flex items-center justify-center px-3 text-primary/50 font-mono text-base bg-muted/5 shrink-0 gap-1 rounded-l-md overflow-hidden">
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-foreground rounded-none" onClick={() => attachInputRef.current?.click()} title="Attach Style References">
                             <Paperclip className="h-3 w-3" />
                         </Button>
                     </div>
-                    <div className="flex-1 relative border-r border-border/20">
-                        <input
+                    <div className="flex-1 relative border-l border-border/20 flex flex-col justify-center min-h-[80px]">
+                        <Textarea
                             ref={textInputRef}
-                            className="w-full bg-transparent border-0 px-4 py-2 text-sm font-mono focus:outline-none focus:ring-0 transition-colors"
+                            className="w-full min-h-[80px] pb-4 resize-none bg-transparent border-0 px-4 pt-4 text-sm font-mono focus:outline-none focus:ring-0 focus-visible:ring-0 shadow-none transition-colors"
                             placeholder="e.g. A mode for creating 90s Anime cel-shaded illustrations... (or drop images)"
                             value={creationPrompt}
                             onChange={handleTextInput}
@@ -294,15 +300,33 @@ export default function ModesPage() {
                             </div>
                         )}
                     </div>
+                </div>
+
+                <div className="flex justify-between items-center mt-3">
+                    <div className="flex-1">
+                        {statusMsg ? (
+                            <div className={`text-[10px] uppercase font-mono tracking-widest flex items-center gap-2 p-2 border inline-flex ${isError ? 'text-destructive border-destructive/30 bg-destructive/10' : 'text-green-500 border-green-500/30 bg-green-500/10'}`}>
+                                <span>// {statusMsg}</span>
+                                {isError ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                            </div>
+                        ) : (
+                            <span className="text-[10px] uppercase font-mono tracking-widest text-muted-foreground/50">
+                                // The LLM will engineer a high-quality system prompt and parameter extractions for you.
+                            </span>
+                        )}
+                    </div>
+
                     <Button
                         onClick={handleDraftMode}
+                        size="sm"
                         disabled={isGenerating || !creationPrompt.trim() || !settings.apiKey}
-                        className="gap-2 shrink-0 rounded-l-none"
+                        className="gap-2 h-8 px-4 text-[10px] uppercase font-mono tracking-widest shrink-0"
                     >
-                        {isGenerating ? <div className="animate-spin h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full" /> : <Plus className="h-4 w-4" />}
+                        {isGenerating ? <div className="animate-spin h-3 w-3 border-2 border-primary-foreground border-t-transparent rounded-full" /> : <Plus className="h-3 w-3" />}
                         Draft Mode
                     </Button>
                 </div>
+
                 {/* Hidden file input */}
                 <input type="file" ref={attachInputRef} className="hidden" accept="image/*" multiple onChange={async (e) => {
                     const files = e.target.files;
@@ -312,7 +336,9 @@ export default function ModesPage() {
                     const currentCount = pendingReferenceIds.length;
 
                     if (currentCount + newFiles.length > 5) {
-                        alert(`You can only attach up to 5 reference images. Adding the first ${5 - currentCount}.`);
+                        setStatusMsg(`You can only attach up to 5 reference images. Adding the first ${5 - currentCount}.`);
+                        setIsError(true);
+                        setTimeout(() => setStatusMsg(""), 4000);
                         newFiles = newFiles.slice(0, 5 - currentCount);
                     }
 
@@ -327,9 +353,6 @@ export default function ModesPage() {
 
                     if (attachInputRef.current) attachInputRef.current.value = "";
                 }} />
-                <div className="mt-3 text-xs text-muted-foreground/60 italic">
-                    {!settings.apiKey ? "// [WARNING] You must configure an API Key in Settings to use the Mode Architect." : "// The LLM will engineer a high-quality system prompt and parameter extractions for you."}
-                </div>
             </div>
 
             {/* List of Modes */}
