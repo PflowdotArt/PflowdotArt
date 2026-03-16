@@ -1,4 +1,4 @@
-# PromptFlow (PromptMaster) - v0.3 Architecture
+.# PromptFlow (PromptMaster) - v0.3 Architecture
 
 ## 1. Requirements & Core Entities
 PromptFlow is an advanced AI Prompt Engineering Workspace designed to structure latent diffusion model prompts (Midjourney, Flux, ComfyUI, DALL-E) using specialized AI directorial modes. As of v0.3, the platform is fully cloud-authenticated via Supabase with a polished public-facing identity.
